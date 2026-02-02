@@ -1,0 +1,3491 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Dashboard RSS</title>
+    
+    <!-- Meta Tags PWA -->
+    <meta name="description" content="Painel de notícias RSS">
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="theme-color" content="#2c5364">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Dashboard RSS">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="msapplication-TileColor" content="#0f2027">
+    <meta name="msapplication-tap-highlight" content="no">
+    
+    <!-- Manifesto PWA (deployar manifest.json e sw.js junto com TV.html) -->
+    <link rel="manifest" href="./manifest.json">
+    
+    <!-- Favicon (SVG inline) -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%230f2027' width='100' height='100' rx='20'/><text x='50' y='62' text-anchor='middle' font-size='50'>📰</text></svg>">
+    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%230f2027' width='100' height='100' rx='20'/><text x='50' y='62' text-anchor='middle' font-size='50'>📰</text></svg>">
+    
+    <!-- Pré-conexão para performance -->
+    <link rel="preconnect" href="https://api.allorigins.win">
+    <link rel="preconnect" href="https://api.open-meteo.com">
+    <link rel="preconnect" href="https://economia.awesomeapi.com.br">
+    <link rel="dns-prefetch" href="https://nominatim.openstreetmap.org">
+    <!-- Força animações -->
+    <script>
+        (function() {
+            var q = new URLSearchParams(location.search);
+            if (q.get('animations') === '1') {
+                try { localStorage.setItem('tv-animations', '1'); } catch (e) {}
+                document.documentElement.classList.add('animations-forced');
+            } else {
+                try {
+                    if (localStorage.getItem('tv-animations') === '1') document.documentElement.classList.add('animations-forced');
+                } catch (e) {}
+            }
+        })();
+    </script>
+    <style>
+        /* Variáveis (tema e layout) */
+        :root {
+            /* Cores */
+            --color-bg-start: #0f2027;
+            --color-bg-mid: #203a43;
+            --color-bg-end: #2c5364;
+            --color-text: #fff;
+            --color-text-secondary: rgba(255, 255, 255, 0.9);
+            --color-error: rgba(244, 67, 54, 0.2);
+            
+            /* Efeito de vidro */
+            --vidro-borda: rgba(255, 255, 255, 0.3);
+            --vidro-borda-hover: rgba(255, 255, 255, 0.45);
+            --vidro-destaque: rgba(255, 255, 255, 0.35);
+            --vidro-sombra: rgba(0, 0, 0, 0.4);
+            
+            /* Layout */
+            --border-radius: clamp(20px, 3vw, 32px);
+            --border-radius-inner: clamp(16px, 2.5vw, 28px);
+            --spacing-base: clamp(24px, 4vw, 48px);
+            --grid-gap: clamp(16px, 2.5vw, 40px);
+            
+            /* Tipografia */
+            --font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            --font-size-title: clamp(1.2rem, 2vw, 2rem);
+            --font-size-meta: clamp(0.85rem, 1.2vw, 1.2rem);
+            --line-height-title: 1.35;
+            
+            /* Animação */
+            /* Desacelerar */
+            --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+            /* Padrão */
+            --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+            /* Acelerar */
+            --ease-in-out-soft: cubic-bezier(0.45, 0, 0.15, 1);
+            /* Mola */
+            --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+            
+            /* Durações de Transição */
+            --duration-fast: 250ms;
+            --duration-medium: 400ms;
+            --duration-slow: 600ms;
+            --duration-carousel: 800ms;
+            
+            /* Intervalo do carrossel (sincronizado com JS) */
+            --carousel-interval: 6s;
+            
+            /* Proteção contra burn-in */
+            --burnin-shift-amount: 4px;
+            --burnin-cycle-duration: 120s;
+            
+            /* Widget de Clima (para cálculo do padding do body) */
+            --weather-widget-height: 56px;
+            /* Margem superior da barra de widgets (menor que spacing-base) */
+            --weather-widget-margin: clamp(12px, 2.5vw, 32px);
+            /* Espaço extra entre barra superior (hora/clima/câmbio) e o conteúdo */
+            --top-bar-gap: 24px;
+            /* Margem inferior da página (reduzida em relação ao spacing-base) */
+            --footer-padding: clamp(12px, 2.5vw, 32px);
+        }
+
+        /* Link pular conteúdo */
+        .skip-link {
+            position: absolute;
+            top: -100px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 9999;
+            padding: 12px 24px;
+            background: var(--color-bg-start);
+            color: var(--color-text);
+            text-decoration: none;
+            border-radius: 0 0 12px 12px;
+            font-weight: 500;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            transition: top var(--duration-fast) var(--ease-standard);
+        }
+        
+        .skip-link:focus {
+            top: 0;
+            outline: 2px solid var(--color-text);
+            outline-offset: 4px;
+        }
+
+        /* Reset e base */
+        *, *::before, *::after {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html {
+            font-size: 16px;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            /* Oculta barra de rolagem */
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+
+        html::-webkit-scrollbar {
+            display: none;
+        }
+
+        body {
+            font-family: var(--font-family);
+            background: linear-gradient(135deg, 
+                var(--color-bg-start) 0%, 
+                var(--color-bg-mid) 50%, 
+                var(--color-bg-end) 100%);
+            background-attachment: fixed;
+            color: var(--color-text);
+            padding: var(--spacing-base);
+            padding-bottom: var(--footer-padding);
+            /* Padding dinâmico baseado no tamanho do widget de clima */
+            padding-top: calc(var(--weather-widget-margin) + var(--weather-widget-height) + var(--spacing-base) + var(--top-bar-gap));
+            min-height: 100vh;
+            overflow-x: hidden;
+            /* Proteção contra burn-in: deslocamento sutil de pixels */
+            animation: burnInProtection var(--burnin-cycle-duration) ease-in-out infinite;
+        }
+        
+        /* Animação de proteção contra burn-in */
+        @keyframes burnInProtection {
+            0%, 100% {
+                transform: translate(0, 0);
+            }
+            25% {
+                transform: translate(var(--burnin-shift-amount), 0);
+            }
+            50% {
+                transform: translate(var(--burnin-shift-amount), var(--burnin-shift-amount));
+            }
+            75% {
+                transform: translate(0, var(--burnin-shift-amount));
+            }
+        }
+        
+        /* Desabilita proteção contra burn-in quando usuário prefere movimento reduzido */
+        @media (prefers-reduced-motion: reduce) {
+            html:not(.animations-forced) body {
+                animation: none;
+            }
+        }
+        
+        /* Otimizações específicas para TV */
+        @media (min-width: 1920px) and (min-height: 1080px) {
+            body {
+                /* Deslocamentos maiores para telas maiores */
+                --burnin-shift-amount: 4px;
+                --burnin-cycle-duration: 90s;
+            }
+        }
+
+        /* ============================================
+           Widget de Clima
+           ============================================ */
+        .weather-widget {
+            position: fixed;
+            top: var(--weather-widget-margin);
+            right: var(--weather-widget-margin);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 20px;
+            border-radius: 20px;
+            max-width: calc(100vw - var(--weather-widget-margin) * 2);
+            
+            /* Efeito de vidro aprimorado */
+            background: rgba(255, 255, 255, 0.06);
+            backdrop-filter: blur(20px) saturate(1.3);
+            -webkit-backdrop-filter: blur(20px) saturate(1.3);
+            border: 1.5px solid var(--vidro-borda);
+            
+            /* Sombras multi-camadas do vidro */
+            box-shadow: 
+                /* Brilho externo */
+                0 0 0 1px rgba(255, 255, 255, 0.08),
+                /* Sombra de profundidade */
+                0 4px 24px var(--vidro-sombra),
+                /* Destaque especular superior */
+                inset 0 1px 0 rgba(255, 255, 255, 0.5),
+                inset 1px 0 0 rgba(255, 255, 255, 0.2),
+                /* Sombra inferior */
+                inset 0 -1px 0 rgba(0, 0, 0, 0.15),
+                inset -1px 0 0 rgba(0, 0, 0, 0.08),
+                /* Brilho interno */
+                inset 0 0 20px rgba(255, 255, 255, 0.03);
+            
+            /* Animação */
+            animation: weatherWidgetEntrance var(--duration-slow) var(--ease-out-expo) 300ms backwards;
+            transition: 
+                transform var(--duration-medium) var(--ease-standard),
+                box-shadow var(--duration-medium) var(--ease-standard),
+                border-color var(--duration-medium) var(--ease-standard);
+        }
+
+        .weather-widget:hover {
+            transform: translateY(-2px);
+            border-color: var(--vidro-borda-hover);
+            box-shadow: 
+                0 0 0 1px rgba(255, 255, 255, 0.12),
+                0 0 30px rgba(255, 255, 255, 0.08),
+                0 8px 32px var(--vidro-sombra),
+                inset 0 1px 0 rgba(255, 255, 255, 0.6),
+                inset 1px 0 0 rgba(255, 255, 255, 0.25),
+                inset 0 -1px 0 rgba(0, 0, 0, 0.2),
+                inset -1px 0 0 rgba(0, 0, 0, 0.1),
+                inset 0 0 30px rgba(255, 255, 255, 0.05);
+        }
+
+        .weather-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1;
+            filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+            transition: transform var(--duration-medium) var(--ease-spring);
+            flex-shrink: 0;
+        }
+
+        .weather-icon img {
+            display: block;
+            width: clamp(28px, 3vw, 40px);
+            height: clamp(28px, 3vw, 40px);
+            object-fit: contain;
+        }
+
+        .weather-widget:hover .weather-icon {
+            transform: scale(1.1);
+        }
+
+        .weather-info {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            min-width: 0; /* Permite truncamento de texto */
+        }
+
+        .weather-temp {
+            font-size: clamp(1rem, 2vw, 1.4rem);
+            font-weight: 600;
+            line-height: 1.2;
+            letter-spacing: -0.02em;
+            text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+            white-space: nowrap;
+        }
+
+        .weather-condition {
+            font-size: clamp(0.65rem, 1.2vw, 0.8rem);
+            font-weight: 400;
+            opacity: 0.75;
+            text-transform: capitalize;
+            letter-spacing: 0.02em;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .weather-location {
+            font-size: clamp(0.6rem, 1vw, 0.7rem);
+            font-weight: 300;
+            opacity: 0.5;
+            margin-top: 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* Estado de carregamento do clima */
+        .weather-widget.loading .weather-icon {
+            animation: weatherPulse 1.5s var(--ease-in-out-soft) infinite;
+        }
+
+        .weather-widget.loading .weather-temp,
+        .weather-widget.loading .weather-condition {
+            opacity: 0.5;
+        }
+
+        /* Animação de atualização do clima */
+        .weather-widget.updating .weather-info {
+            animation: weatherInfoUpdate var(--duration-medium) var(--ease-standard);
+        }
+
+        @keyframes weatherWidgetEntrance {
+            0% {
+                opacity: 0;
+                transform: translateY(-10px) scale(0.95);
+            }
+            100% {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        @keyframes weatherPulse {
+            0%, 100% {
+                opacity: 0.6;
+                transform: scale(1);
+            }
+            50% {
+                opacity: 1;
+                transform: scale(1.05);
+            }
+        }
+
+        @keyframes weatherInfoUpdate {
+            0% {
+                opacity: 0.5;
+                transform: translateY(2px);
+            }
+            100% {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* ============================================
+           Widget de Cotações
+           ============================================ */
+        .currency-ticker {
+            position: fixed;
+            top: var(--weather-widget-margin);
+            left: var(--weather-widget-margin);
+            z-index: 1000;
+            /* Evita sobreposição com o widget de hora no centro: no máximo 1/3 da tela à esquerda */
+            max-width: calc(33.33% - var(--weather-widget-margin));
+            overflow: hidden;
+            
+            /* Efeito de vidro */
+            background: rgba(255, 255, 255, 0.06);
+            backdrop-filter: blur(20px) saturate(1.3);
+            -webkit-backdrop-filter: blur(20px) saturate(1.3);
+            border: 1.5px solid var(--vidro-borda);
+            border-radius: 20px;
+            
+            /* Sombras do vidro */
+            box-shadow: 
+                0 0 0 1px rgba(255, 255, 255, 0.08),
+                0 4px 24px var(--vidro-sombra),
+                inset 0 1px 0 rgba(255, 255, 255, 0.5),
+                inset 1px 0 0 rgba(255, 255, 255, 0.2),
+                inset 0 -1px 0 rgba(0, 0, 0, 0.15),
+                inset -1px 0 0 rgba(0, 0, 0, 0.08),
+                inset 0 0 20px rgba(255, 255, 255, 0.03);
+            
+            animation: currencyTickerEntrance var(--duration-slow) var(--ease-out-expo) 400ms backwards;
+            transition: 
+                transform var(--duration-medium) var(--ease-standard),
+                box-shadow var(--duration-medium) var(--ease-standard),
+                border-color var(--duration-medium) var(--ease-standard);
+        }
+        
+        .currency-ticker:hover {
+            transform: translateY(-2px);
+            border-color: var(--vidro-borda-hover);
+            box-shadow: 
+                0 0 0 1px rgba(255, 255, 255, 0.12),
+                0 0 30px rgba(255, 255, 255, 0.08),
+                0 8px 32px var(--vidro-sombra),
+                inset 0 1px 0 rgba(255, 255, 255, 0.6),
+                inset 1px 0 0 rgba(255, 255, 255, 0.25),
+                inset 0 -1px 0 rgba(0, 0, 0, 0.2),
+                inset -1px 0 0 rgba(0, 0, 0, 0.1),
+                inset 0 0 30px rgba(255, 255, 255, 0.05);
+        }
+        
+        /* Pausa a animação no hover */
+        .currency-ticker:hover .currency-ticker-track {
+            animation-play-state: paused;
+        }
+        
+        .currency-ticker-inner {
+            display: flex;
+            align-items: center;
+            padding: 12px 20px;
+            gap: 8px;
+        }
+        
+        .currency-ticker-label {
+            font-size: clamp(0.7rem, 1.2vw, 0.85rem);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: rgba(255, 255, 255, 0.7);
+            white-space: nowrap;
+            padding-right: 8px;
+            border-right: 1px solid rgba(255, 255, 255, 0.2);
+            flex-shrink: 0;
+        }
+        
+        .currency-ticker-container {
+            flex: 1;
+            overflow: hidden;
+            mask-image: linear-gradient(90deg, transparent, white 10%, white 90%, transparent);
+            -webkit-mask-image: linear-gradient(90deg, transparent, white 10%, white 90%, transparent);
+        }
+        
+        .currency-ticker-track {
+            display: flex;
+            gap: 24px;
+            animation: tickerScroll var(--ticker-duration, 20s) linear infinite;
+            width: max-content;
+        }
+        
+        .currency-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            white-space: nowrap;
+            font-size: clamp(0.75rem, 1.3vw, 0.9rem);
+        }
+        
+        .currency-flag {
+            font-size: clamp(0.9rem, 1.5vw, 1.1rem);
+            filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
+        }
+        
+        .currency-code {
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.9);
+            letter-spacing: 0.5px;
+        }
+        
+        .currency-value {
+            font-weight: 400;
+            color: rgba(255, 255, 255, 0.75);
+            font-variant-numeric: tabular-nums;
+        }
+        
+        .currency-change {
+            font-size: clamp(0.65rem, 1.1vw, 0.75rem);
+            font-weight: 500;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-variant-numeric: tabular-nums;
+        }
+        
+        .currency-change.positive {
+            color: #4ade80;
+            background: rgba(74, 222, 128, 0.15);
+        }
+        
+        .currency-change.negative {
+            color: #f87171;
+            background: rgba(248, 113, 113, 0.15);
+        }
+        
+        .currency-change.neutral {
+            color: rgba(255, 255, 255, 0.6);
+            background: rgba(255, 255, 255, 0.1);
+        }
+        
+        /* Estado de carregamento */
+        .currency-ticker.loading .currency-ticker-track {
+            animation: none;
+        }
+        
+        .currency-ticker.loading .currency-item {
+            opacity: 0.5;
+        }
+        
+        /* Animação da tarja */
+        @keyframes tickerScroll {
+            0% {
+                transform: translateX(0);
+            }
+            100% {
+                transform: translateX(-50%);
+            }
+        }
+        
+        @keyframes currencyTickerEntrance {
+            0% {
+                opacity: 0;
+                transform: translateX(-20px) scale(0.95);
+            }
+            100% {
+                opacity: 1;
+                transform: translateX(0) scale(1);
+            }
+        }
+
+        /* ============================================
+           Widget de Hora (Relógio)
+           ============================================ */
+        .clock-widget {
+            position: fixed;
+            top: var(--weather-widget-margin);
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            padding: 12px 20px;
+            border-radius: 20px;
+            min-width: 120px;
+
+            background: rgba(255, 255, 255, 0.06);
+            backdrop-filter: blur(20px) saturate(1.3);
+            -webkit-backdrop-filter: blur(20px) saturate(1.3);
+            border: 1.5px solid var(--vidro-borda);
+
+            box-shadow:
+                0 0 0 1px rgba(255, 255, 255, 0.08),
+                0 4px 24px var(--vidro-sombra),
+                inset 0 1px 0 rgba(255, 255, 255, 0.5),
+                inset 1px 0 0 rgba(255, 255, 255, 0.2),
+                inset 0 -1px 0 rgba(0, 0, 0, 0.15),
+                inset -1px 0 0 rgba(0, 0, 0, 0.08),
+                inset 0 0 20px rgba(255, 255, 255, 0.03);
+
+            animation: weatherWidgetEntrance var(--duration-slow) var(--ease-out-expo) 200ms backwards;
+            transition:
+                transform var(--duration-medium) var(--ease-standard),
+                box-shadow var(--duration-medium) var(--ease-standard),
+                border-color var(--duration-medium) var(--ease-standard);
+        }
+
+        .clock-widget:hover {
+            transform: translateX(-50%) translateY(-2px);
+            border-color: var(--vidro-borda-hover);
+            box-shadow:
+                0 0 0 1px rgba(255, 255, 255, 0.12),
+                0 0 30px rgba(255, 255, 255, 0.08),
+                0 8px 32px var(--vidro-sombra),
+                inset 0 1px 0 rgba(255, 255, 255, 0.6),
+                inset 1px 0 0 rgba(255, 255, 255, 0.25),
+                inset 0 -1px 0 rgba(0, 0, 0, 0.2),
+                inset -1px 0 0 rgba(0, 0, 0, 0.1),
+                inset 0 0 30px rgba(255, 255, 255, 0.05);
+        }
+
+        .clock-widget-time {
+            font-size: clamp(1rem, 1.8vw, 1.4rem);
+            font-weight: 600;
+            font-variant-numeric: tabular-nums;
+            letter-spacing: 0.5px;
+            color: var(--color-text);
+        }
+
+        .clock-widget-date {
+            font-size: clamp(0.7rem, 1.1vw, 0.85rem);
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .clock-widget-update {
+            font-size: clamp(0.6rem, 1vw, 0.75rem);
+            font-weight: 400;
+            color: rgba(255, 255, 255, 0.6);
+            margin-top: 4px;
+            padding-top: 4px;
+            border-top: 1px solid rgba(255, 255, 255, 0.15);
+        }
+
+        .clock-widget-update time {
+            font-variant-numeric: tabular-nums;
+        }
+        
+        /* Responsividade do ticker */
+        @media (max-width: 1200px) {
+            .currency-ticker {
+                max-width: calc(33.33% - var(--weather-widget-margin));
+            }
+        }
+        
+        @media (max-width: 900px) {
+            .currency-ticker {
+                top: auto;
+                bottom: 72px;
+                left: 50%;
+                transform: translateX(-50%);
+                max-width: calc(100vw - var(--weather-widget-margin) * 2);
+                border-radius: 16px;
+            }
+            
+            .currency-ticker:hover {
+                transform: translateX(-50%) translateY(-2px);
+            }
+            
+            .currency-ticker-label {
+                display: none;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .currency-ticker {
+                bottom: 60px;
+                border-radius: 12px;
+            }
+            
+            .currency-item {
+                gap: 4px;
+            }
+            
+            .currency-change {
+                display: none;
+            }
+        }
+        
+        /* Movimento reduzido */
+        @media (prefers-reduced-motion: reduce) {
+            html:not(.animations-forced) .currency-ticker-track {
+                animation: none;
+            }
+        }
+
+        /* ============================================
+           Breakpoints do Widget de Clima
+           ============================================ */
+        
+        /* Tablets e telas médias - alinhado entre clima, câmbio e relógio */
+        @media (max-width: 1024px) {
+            :root {
+                --weather-widget-height: 48px;
+                --weather-widget-margin: 16px;
+            }
+            
+            .weather-widget {
+                padding: 8px 16px;
+                gap: 8px;
+                border-radius: 16px;
+            }
+
+            .clock-widget {
+                padding: 8px 16px;
+                border-radius: 16px;
+            }
+
+            .currency-ticker-inner {
+                padding: 8px 16px;
+            }
+
+            .currency-ticker {
+                border-radius: 16px;
+            }
+        }
+        
+        /* Celular na horizontal e tablets pequenos */
+        @media (max-width: 768px) {
+            :root {
+                --weather-widget-height: 44px;
+                --weather-widget-margin: 12px;
+            }
+            
+            .weather-widget {
+                padding: 8px 12px;
+                gap: 8px;
+                border-radius: 16px;
+            }
+
+            .clock-widget {
+                padding: 8px 12px;
+                border-radius: 16px;
+            }
+
+            .currency-ticker-inner {
+                padding: 8px 12px;
+            }
+
+            .weather-location {
+                display: none;
+            }
+        }
+
+        /* Celular na vertical */
+        @media (max-width: 480px) {
+            :root {
+                --weather-widget-height: 40px;
+                --weather-widget-margin: 8px;
+            }
+            
+            .weather-widget {
+                padding: 8px 12px;
+                gap: 8px;
+                border-radius: 12px;
+            }
+
+            .clock-widget {
+                padding: 8px 12px;
+                min-width: 100px;
+                border-radius: 12px;
+            }
+
+            .currency-ticker-inner {
+                padding: 8px 12px;
+            }
+
+            .weather-condition {
+                display: none;
+            }
+            
+            .weather-info {
+                gap: 0;
+            }
+        }
+        
+        /* Telas muito pequenas - widget compacto */
+        @media (max-width: 360px) {
+            :root {
+                --weather-widget-height: 36px;
+                --weather-widget-margin: 8px;
+            }
+            
+            .weather-widget {
+                padding: 4px 8px;
+                gap: 4px;
+                border-radius: 12px;
+            }
+        }
+
+        /* ============================================
+           Container de Feeds Grid
+           ============================================ */
+        .feeds-container {
+            display: grid;
+            /* Auto-fit responsivo: mínimo 272px */
+            grid-template-columns: repeat(auto-fit, minmax(min(272px, 100%), 1fr));
+            gap: var(--grid-gap);
+            max-width: 100%;
+            margin: 0 auto;
+        }
+        
+        /* Grid fixo para telas grandes (TV) */
+        @media (min-width: 1400px) {
+            .feeds-container {
+                grid-template-columns: repeat(4, 1fr);
+            }
+        }
+
+        /* ============================================
+           Widget de Feed (Container Query Habilitado)
+           ============================================ */
+        .feed-widget {
+            position: relative;
+            aspect-ratio: 1 / 1;
+            display: flex;
+            flex-direction: column;
+            animation: widgetEntrance var(--duration-slow) var(--ease-out-expo) backwards;
+            
+            /* Habilita Container Queries */
+            container-type: inline-size;
+            container-name: widget;
+        }
+        
+        /* Container Query: Ajustes para widgets pequenos */
+        @container widget (max-width: 320px) {
+            .item-title {
+                font-size: 1.05rem;
+                -webkit-line-clamp: 3;
+                line-clamp: 3;
+            }
+            
+            .item-meta {
+                font-size: 0.78rem;
+            }
+            
+            .item-content {
+                padding: 16px;
+                padding-bottom: 32px;
+                gap: 8px;
+            }
+            
+            .indicator {
+                width: 4px;
+                height: 4px;
+            }
+            
+            .indicator.active {
+                width: 16px;
+            }
+        }
+        
+        /* Container Query: Ajustes para widgets médios */
+        @container widget (min-width: 321px) and (max-width: 450px) {
+            .item-title {
+                font-size: 1.2rem;
+                -webkit-line-clamp: 3;
+                line-clamp: 3;
+            }
+            
+            .item-content {
+                padding: 16px;
+                padding-bottom: 40px;
+            }
+        }
+        
+        /* Container Query: Widgets grandes */
+        @container widget (min-width: 451px) {
+            .item-title {
+                font-size: 1.45rem;
+                -webkit-line-clamp: 4;
+                line-clamp: 4;
+            }
+            
+            .item-meta {
+                font-size: 0.95rem;
+            }
+        }
+
+        /* Entrada escalonada */
+        .feed-widget:nth-child(1) { animation-delay: 50ms; }
+        .feed-widget:nth-child(2) { animation-delay: 100ms; }
+        .feed-widget:nth-child(3) { animation-delay: 150ms; }
+        .feed-widget:nth-child(4) { animation-delay: 200ms; }
+        .feed-widget:nth-child(5) { animation-delay: 280ms; }
+        .feed-widget:nth-child(6) { animation-delay: 360ms; }
+        .feed-widget:nth-child(7) { animation-delay: 440ms; }
+        .feed-widget:nth-child(8) { animation-delay: 520ms; }
+
+        /* ============================================
+           Container do Carrossel
+           ============================================ */
+        .carousel-container {
+            position: relative;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            border-radius: var(--border-radius);
+            overflow: hidden;
+        }
+
+        .carousel-item {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            transform: scale(1.02);
+            transition: 
+                opacity var(--duration-carousel) var(--ease-in-out-soft),
+                transform var(--duration-carousel) var(--ease-in-out-soft);
+            pointer-events: none;
+            border-radius: var(--border-radius-inner);
+            overflow: hidden;
+            /* Propriedade will-change aplicada apenas durante transições via classe .active */
+        }
+        
+        .carousel-item.active {
+            opacity: 1;
+            transform: scale(1);
+            z-index: 1;
+            pointer-events: auto;
+            will-change: opacity, transform;
+        }
+
+        /* ============================================
+           Cartão de vidro
+           ============================================ */
+        .feed-item {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            background-size: cover;
+            background-position: center;
+            background-color: #1a2332;
+            border-radius: var(--border-radius);
+            overflow: hidden;
+            isolation: isolate;
+            transform: translateZ(0);
+            transition: transform var(--duration-medium) var(--ease-standard);
+        }
+
+        .feed-item:hover {
+            transform: translateY(-2px) translateZ(0);
+        }
+
+        /* Moldura externa do cartão com borda de vidro */
+        .feed-item::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            z-index: 20;
+            border-radius: var(--border-radius);
+            pointer-events: none;
+            
+            /* Borda de vidro */
+            border: 1.5px solid var(--vidro-borda);
+            
+            /* Sombras multi-camadas para profundidade do vidro */
+            box-shadow: 
+                /* Brilho externo */
+                0 0 0 1px rgba(255, 255, 255, 0.08),
+                /* Sombra de profundidade */
+                0 8px 32px var(--vidro-sombra),
+                /* Destaque interno superior - refração de luz */
+                inset 0 1px 0 var(--vidro-destaque),
+                inset 1px 0 0 rgba(255, 255, 255, 0.12),
+                /* Sombra interna inferior/direita */
+                inset 0 -1px 0 rgba(0, 0, 0, 0.12),
+                inset -1px 0 0 rgba(0, 0, 0, 0.08);
+            
+            transition: 
+                border-color var(--duration-medium) var(--ease-standard),
+                box-shadow var(--duration-medium) var(--ease-standard);
+        }
+
+        .feed-item:hover::after {
+            border-color: var(--vidro-borda-hover);
+            box-shadow: 
+                0 0 0 1px rgba(255, 255, 255, 0.12),
+                0 0 30px rgba(255, 255, 255, 0.06),
+                0 16px 48px var(--vidro-sombra),
+                inset 0 1px 0 rgba(255, 255, 255, 0.45),
+                inset 1px 0 0 rgba(255, 255, 255, 0.18),
+                inset 0 -1px 0 rgba(0, 0, 0, 0.15),
+                inset -1px 0 0 rgba(0, 0, 0, 0.1);
+        }
+
+        /* ============================================
+           Painel de vidro (Área de Conteúdo Inferior)
+           ============================================ */
+        .vidro-painel {
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            height: 55%;
+            z-index: 5;
+            pointer-events: none;
+            
+            /* Gradiente escuro para legibilidade */
+            background: linear-gradient(
+                to bottom,
+                rgba(0, 0, 0, 0.0) 0%,
+                rgba(0, 0, 0, 0.35) 20%,
+                rgba(0, 0, 0, 0.7) 50%,
+                rgba(0, 0, 0, 0.9) 100%
+            );
+            
+            /* Efeito sutil de blur do vidro */
+            backdrop-filter: blur(4px) saturate(1.1);
+            -webkit-backdrop-filter: blur(4px) saturate(1.1);
+            
+            /* Máscara suave para desvanecer o blur gradualmente */
+            mask-image: linear-gradient(
+                to bottom,
+                transparent 0%,
+                rgba(0, 0, 0, 0.3) 10%,
+                rgba(0, 0, 0, 0.7) 20%,
+                black 35%,
+                black 100%
+            );
+            -webkit-mask-image: linear-gradient(
+                to bottom,
+                transparent 0%,
+                rgba(0, 0, 0, 0.3) 10%,
+                rgba(0, 0, 0, 0.7) 20%,
+                black 35%,
+                black 100%
+            );
+        }
+
+        /* Camada de distorção do vidro - aplica filtro SVG para refração de luz */
+        .vidro-distorcao {
+            position: absolute;
+            inset: 0;
+            z-index: 2;
+            pointer-events: none;
+            border-radius: var(--border-radius);
+            filter: url(#vidro-distorcao);
+            opacity: 0.15;
+            mix-blend-mode: overlay;
+        }
+
+        /* Camada especular do vidro - destaques das bordas internas */
+        .vidro-especular {
+            position: absolute;
+            inset: 0;
+            z-index: 19;
+            pointer-events: none;
+            border-radius: var(--border-radius);
+            
+            /* Destaques especulares multi-camadas */
+            box-shadow:
+                /* Destaque da borda superior - especular primário */
+                inset 0 1px 0 rgba(255, 255, 255, 0.5),
+                /* Destaque da borda esquerda */
+                inset 1px 0 0 rgba(255, 255, 255, 0.25),
+                /* Sombra da borda inferior */
+                inset 0 -1px 0 rgba(0, 0, 0, 0.3),
+                /* Sombra da borda direita */
+                inset -1px 0 0 rgba(0, 0, 0, 0.15),
+                /* Brilho interno para profundidade */
+                inset 0 0 30px rgba(255, 255, 255, 0.03);
+            
+            transition: box-shadow var(--duration-medium) var(--ease-standard);
+        }
+
+        .feed-item:hover .vidro-especular {
+            box-shadow:
+                inset 0 1px 0 rgba(255, 255, 255, 0.6),
+                inset 1px 0 0 rgba(255, 255, 255, 0.3),
+                inset 0 -1px 0 rgba(0, 0, 0, 0.35),
+                inset -1px 0 0 rgba(0, 0, 0, 0.2),
+                inset 0 0 40px rgba(255, 255, 255, 0.05);
+        }
+
+        /* Destaque especular superior no cartão - reflexão de luz primária */
+        .vidro-destaque {
+            position: absolute;
+            top: 0;
+            left: 5%;
+            right: 5%;
+            height: 1px;
+            z-index: 21;
+            /* Gradiente de brilho com tamanho estendido para animação */
+            background: linear-gradient(
+                90deg,
+                transparent 0%,
+                transparent 25%,
+                rgba(255, 255, 255, 0.15) 30%,
+                rgba(255, 255, 255, 0.4) 40%,
+                rgba(255, 255, 255, 0.6) 50%,
+                rgba(255, 255, 255, 0.4) 60%,
+                rgba(255, 255, 255, 0.15) 70%,
+                transparent 75%,
+                transparent 100%
+            );
+            background-size: 200% 100%;
+            background-position: 100% 0;
+            pointer-events: none;
+            opacity: 0.9;
+            transition: opacity var(--duration-medium) var(--ease-standard);
+            /* Animação de brilho */
+            animation: vidroBrilho 8s var(--ease-in-out-soft) infinite;
+        }
+
+        /* Destaque secundário - levemente abaixo do primário */
+        .vidro-destaque::after {
+            content: '';
+            position: absolute;
+            top: 1px;
+            left: 10%;
+            right: 10%;
+            height: 1px;
+            background: linear-gradient(
+                90deg,
+                transparent 0%,
+                rgba(255, 255, 255, 0.08) 20%,
+                rgba(255, 255, 255, 0.15) 50%,
+                rgba(255, 255, 255, 0.08) 80%,
+                transparent 100%
+            );
+            filter: blur(1px);
+        }
+
+        .feed-item:hover .vidro-destaque {
+            opacity: 1;
+            animation-play-state: paused;
+        }
+        
+        /* Animação do brilho para destaques de vidro */
+        @keyframes vidroBrilho {
+            0% {
+                opacity: 0.7;
+                background-position: 100% 0;
+            }
+            50% {
+                opacity: 1;
+                background-position: 0% 0;
+            }
+            100% {
+                opacity: 0.7;
+                background-position: -100% 0;
+            }
+        }
+        
+        /* Aberração cromática no hover para efeito de vidro aprimorado */
+        .feed-item:hover .item-title {
+            filter: url(#aberracao-cromatica-sutil);
+        }
+
+        /* Reflexão de luz no canto - simula fonte de luz */
+        .vidro-reflexo {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 50%;
+            height: 40%;
+            z-index: 6;
+            pointer-events: none;
+            border-radius: var(--border-radius) 0 0 0;
+            
+            /* Gradiente de reflexão multi-camadas */
+            background: 
+                /* Reflexão primária */
+                radial-gradient(
+                    ellipse 80% 60% at 15% 15%,
+                    rgba(255, 255, 255, 0.12) 0%,
+                    rgba(255, 255, 255, 0.05) 40%,
+                    transparent 70%
+                ),
+                /* Reflexão difusa secundária */
+                linear-gradient(
+                    135deg,
+                    rgba(255, 255, 255, 0.08) 0%,
+                    transparent 50%
+                );
+            
+            opacity: 0.8;
+            transition: opacity var(--duration-medium) var(--ease-standard);
+        }
+
+        .feed-item:hover .vidro-reflexo {
+            opacity: 1;
+        }
+
+        /* Sombra inferior direita para profundidade */
+        .vidro-sombra {
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            width: 30%;
+            height: 20%;
+            z-index: 6;
+            pointer-events: none;
+            border-radius: 0 0 var(--border-radius) 0;
+            background: radial-gradient(
+                ellipse at bottom right,
+                rgba(0, 0, 0, 0.15) 0%,
+                transparent 70%
+            );
+            opacity: 0.6;
+        }
+
+        /* ============================================
+           Camada de Conteúdo
+           ============================================ */
+        .item-content {
+            position: relative;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            padding: 24px;
+            padding-top: 20px;
+            padding-bottom: 44px;
+        }
+
+        .item-title {
+            font-size: var(--font-size-title);
+            font-weight: 600;
+            line-height: var(--line-height-title);
+            display: -webkit-box;
+            -webkit-line-clamp: 4;
+            line-clamp: 4;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            text-shadow: 0 2px 12px rgba(0, 0, 0, 0.9);
+            letter-spacing: -0.01em;
+        }
+
+        .item-title a {
+            color: var(--color-text);
+            text-decoration: none;
+            transition: 
+                opacity var(--duration-fast) var(--ease-standard),
+                text-shadow var(--duration-fast) var(--ease-standard);
+        }
+
+        .item-title a:hover {
+            opacity: 0.95;
+            text-shadow: 
+                0 2px 12px rgba(0, 0, 0, 0.9),
+                0 0 20px rgba(255, 255, 255, 0.15);
+        }
+
+        .item-meta {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: var(--font-size-meta);
+            color: var(--color-text-secondary);
+            font-weight: 400;
+            text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+        }
+
+        .item-meta time {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .item-meta .item-time-icon {
+            width: 16px;
+            height: 16px;
+            object-fit: contain;
+            flex-shrink: 0;
+            vertical-align: middle;
+        }
+
+        .item-source {
+            font-weight: 500;
+            opacity: 0.95;
+            padding: 4px 8px;
+            background: rgba(255, 255, 255, 0.12);
+            border-radius: 8px;
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            transition: 
+                background var(--duration-fast) var(--ease-standard),
+                border-color var(--duration-fast) var(--ease-standard);
+        }
+
+        .feed-item:hover .item-source {
+            background: rgba(255, 255, 255, 0.16);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .item-separator {
+            opacity: 0.5;
+        }
+
+        /* ============================================
+           Indicadores do Carrossel
+           ============================================ */
+        .carousel-indicators {
+            position: absolute;
+            bottom: 16px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            z-index: 100;
+        }
+
+        .indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.3);
+            cursor: pointer;
+            box-shadow: 
+                0 1px 3px rgba(0, 0, 0, 0.3),
+                inset 0 1px 0 rgba(255, 255, 255, 0.2);
+            border: none;
+            padding: 0;
+            transition: 
+                width var(--duration-medium) var(--ease-out-expo),
+                background var(--duration-fast) var(--ease-standard),
+                border-radius var(--duration-medium) var(--ease-out-expo),
+                transform var(--duration-fast) var(--ease-standard),
+                box-shadow var(--duration-fast) var(--ease-standard);
+        }
+
+        .indicator:hover {
+            background: rgba(255, 255, 255, 0.5);
+            transform: scale(1.1);
+        }
+
+        .indicator.active {
+            background: rgba(255, 255, 255, 0.3);
+            width: 20px;
+            border-radius: 4px;
+            box-shadow: 
+                0 2px 8px rgba(255, 255, 255, 0.2),
+                inset 0 1px 0 rgba(255, 255, 255, 0.5);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        /* Barra de progresso dentro do indicador ativo */
+        .indicator.active::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            width: 0%;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 4px;
+            animation: indicatorProgress var(--carousel-interval, 6s) linear forwards;
+        }
+        
+        /* Pausa a animação quando o carrossel está pausado (hover) */
+        .feed-widget:hover .indicator.active::after {
+            animation-play-state: paused;
+        }
+        
+        @keyframes indicatorProgress {
+            from {
+                width: 0%;
+            }
+            to {
+                width: 100%;
+            }
+        }
+
+        .indicator:active {
+            transform: scale(0.95);
+        }
+
+        /* ============================================
+           Estado de Carregamento
+           ============================================ */
+        .loading {
+            text-align: center;
+            font-size: 1.8rem;
+            padding: 60px;
+            font-weight: 300;
+            grid-column: 1 / -1;
+            position: relative;
+            border-radius: var(--border-radius);
+            overflow: hidden;
+            animation: loadingFadeIn var(--duration-slow) var(--ease-out-expo);
+        }
+
+        .loading::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: rgba(255, 255, 255, 0.04);
+            backdrop-filter: blur(16px) saturate(1.2);
+            -webkit-backdrop-filter: blur(16px) saturate(1.2);
+            border-radius: var(--border-radius);
+            border: 1.5px solid var(--vidro-borda);
+            box-shadow: 
+                0 0 0 1px rgba(255, 255, 255, 0.08),
+                0 8px 32px var(--vidro-sombra),
+                inset 0 1px 0 rgba(255, 255, 255, 0.4),
+                inset 1px 0 0 rgba(255, 255, 255, 0.15),
+                inset 0 -1px 0 rgba(0, 0, 0, 0.1),
+                inset 0 0 30px rgba(255, 255, 255, 0.02);
+        }
+
+        .loading-content {
+            position: relative;
+            z-index: 1;
+            opacity: 0.85;
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-top-color: rgba(255, 255, 255, 0.9);
+            border-radius: 50%;
+            animation: spinnerRotate 0.8s var(--ease-in-out-soft) infinite;
+            margin-right: 12px;
+            vertical-align: middle;
+        }
+
+        @keyframes spinnerRotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        @keyframes loadingFadeIn {
+            from {
+                opacity: 0;
+                transform: scale(0.98);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        /* ============================================
+           Estado de Erro
+           ============================================ */
+        .error-widget .feed-item {
+            background: var(--color-error);
+        }
+
+        .error-icon {
+            font-size: 2rem;
+            margin-bottom: 8px;
+        }
+
+        /* ============================================
+           Animações
+           ============================================ */
+        
+        /* Entrada do widget - elevação sutil com fade */
+        @keyframes widgetEntrance {
+            0% {
+                opacity: 0;
+                transform: translateY(16px) scale(0.98);
+            }
+            100% {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        /* ============================================
+           Breakpoints
+           ============================================ */
+        
+        /* Telas médias */
+        @media (max-width: 1200px) {
+            :root {
+                --spacing-base: clamp(20px, 4vw, 40px);
+                --grid-gap: clamp(16px, 3vw, 32px);
+            }
+            /* O padding-top é calculado automaticamente via variáveis do widget de clima */
+        }
+
+        /* Telas pequenas (celular/tablet) */
+        @media (max-width: 768px) {
+            :root {
+                --spacing-base: clamp(16px, 4vw, 24px);
+                --grid-gap: clamp(12px, 3vw, 20px);
+                --border-radius: 24px;
+                --border-radius-inner: 20px;
+            }
+            /* O padding-top é calculado automaticamente via variáveis do widget de clima */
+        }
+
+        @media (min-width: 2560px) {
+            :root {
+                --spacing-base: 48px;
+                --grid-gap: 32px;
+            }
+
+            .feeds-container {
+                max-width: min(3200px, 85vw);
+                margin-left: auto;
+                margin-right: auto;
+            }
+        }
+
+        @media (min-width: 3840px) {
+            :root {
+                --spacing-base: 56px;
+                --grid-gap: 40px;
+            }
+
+            .feeds-container {
+                max-width: min(3600px, 90vw);
+            }
+        }
+        
+        @media (max-width: 1024px) and (orientation: landscape) {
+            .feeds-container {
+                grid-template-columns: repeat(auto-fit, minmax(min(240px, 45%), 1fr));
+            }
+            
+            .feed-widget {
+                aspect-ratio: 4 / 3;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            html:not(.animations-forced) *,
+            html:not(.animations-forced) *::before,
+            html:not(.animations-forced) *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+
+            html:not(.animations-forced) .carousel-item {
+                transition: opacity 0.01ms !important;
+                transform: none !important;
+            }
+
+            html:not(.animations-forced) .feed-widget {
+                animation: none;
+                opacity: 1;
+            }
+
+            html:not(.animations-forced) .loading {
+                animation: none;
+                opacity: 1;
+            }
+
+            html:not(.animations-forced) .weather-widget {
+                animation: none;
+                opacity: 1;
+            }
+
+            html:not(.animations-forced) .weather-widget.loading .weather-icon {
+                animation: none;
+            }
+        }
+        
+        @media (display-mode: fullscreen), (display-mode: standalone) {
+            body {
+                padding: var(--spacing-base);
+                padding-top: calc(var(--weather-widget-margin) + var(--weather-widget-height) + var(--spacing-base) + var(--top-bar-gap));
+            }
+            
+            /* Oculta cursor após inatividade */
+            html.cursor-hidden {
+                cursor: none;
+            }
+            
+            html.cursor-hidden * {
+                cursor: none !important;
+            }
+            
+            .weather-widget::before {
+                content: '';
+                position: absolute;
+                top: -4px;
+                right: -4px;
+                width: 8px;
+                height: 8px;
+                background: #4CAF50;
+                border-radius: 50%;
+                opacity: 0.8;
+            }
+        }
+        
+        /* ============================================
+           Otimizações para Dispositivos com Touch
+           ============================================ */
+        @media (hover: none) and (pointer: coarse) {
+            /* Aumenta áreas de toque */
+            .indicator {
+                min-width: 44px;
+                min-height: 44px;
+                padding: 16px;
+                background-clip: content-box;
+            }
+            
+            /* Remove efeitos hover em touch */
+            .feed-item:hover {
+                transform: none;
+            }
+            
+            .feed-item:hover::after {
+                border-color: var(--vidro-borda);
+            }
+        }
+        
+        /* ============================================
+           Fallbacks para Navegadores sem backdrop-filter
+           ============================================ */
+        @supports not (backdrop-filter: blur(1px)) {
+            .weather-widget {
+                background: rgba(15, 32, 39, 0.9);
+            }
+            
+            .vidro-painel {
+                background: linear-gradient(
+                    to bottom,
+                    rgba(0, 0, 0, 0.0) 0%,
+                    rgba(0, 0, 0, 0.5) 20%,
+                    rgba(0, 0, 0, 0.85) 50%,
+                    rgba(0, 0, 0, 0.95) 100%
+                );
+            }
+            
+            .item-source {
+                background: rgba(255, 255, 255, 0.2);
+            }
+            
+            .loading::before {
+                background: rgba(15, 32, 39, 0.95);
+            }
+        }
+        
+        /* Foco visível (acessibilidade) */
+        .indicator:focus-visible {
+            outline: 2px solid rgba(255, 255, 255, 0.9);
+            outline-offset: 4px;
+            background: rgba(255, 255, 255, 0.5);
+        }
+        
+        .item-title a:focus-visible {
+            outline: 2px solid rgba(255, 255, 255, 0.8);
+            outline-offset: 4px;
+            border-radius: 4px;
+        }
+        
+        /* Suporte ao modo de alto contraste */
+        @media (prefers-contrast: high) {
+            :root {
+                --vidro-borda: rgba(255, 255, 255, 0.6);
+                --vidro-borda-hover: rgba(255, 255, 255, 0.8);
+            }
+            
+            .item-title {
+                text-shadow: none;
+                -webkit-text-stroke: 0.5px rgba(0, 0, 0, 0.5);
+            }
+            
+            .indicator {
+                border: 1px solid rgba(255, 255, 255, 0.5);
+            }
+            
+            .indicator.active {
+                border-color: white;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Link de Pular para Acessibilidade -->
+    <a href="#feedsContainer" class="skip-link">Pular para o conteúdo principal</a>
+    
+    <!-- Filtros SVG para efeito de vidro aprimorado -->
+    <svg class="svg-filters" aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden;">
+        <defs>
+            <!-- Filtro de distorção do vidro -->
+            <filter id="vidro-distorcao" x="-10%" y="-10%" width="120%" height="120%">
+                <!-- Gera padrão de ruído orgânico -->
+                <feTurbulence 
+                    type="fractalNoise" 
+                    baseFrequency="0.015 0.015" 
+                    numOctaves="3" 
+                    seed="5" 
+                    result="noise"
+                />
+                <!-- Suaviza o ruído -->
+                <feGaussianBlur in="noise" stdDeviation="2" result="blurredNoise"/>
+                <!-- Aplica deslocamento para refração -->
+                <feDisplacementMap 
+                    in="SourceGraphic" 
+                    in2="blurredNoise" 
+                    scale="8" 
+                    xChannelSelector="R" 
+                    yChannelSelector="G"
+                />
+            </filter>
+            
+            <!-- Aberração cromática sutil (para estados hover) -->
+            <filter id="aberracao-cromatica-sutil" x="-2%" y="-2%" width="104%" height="104%">
+                <feOffset in="SourceGraphic" dx="-0.5" dy="0" result="red-shifted"/>
+                <feColorMatrix in="red-shifted" type="matrix"
+                    values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0" result="red"/>
+                <feColorMatrix in="SourceGraphic" type="matrix"
+                    values="0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0" result="green"/>
+                <feOffset in="SourceGraphic" dx="0.5" dy="0" result="blue-shifted"/>
+                <feColorMatrix in="blue-shifted" type="matrix"
+                    values="0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0" result="blue"/>
+                <feBlend in="red" in2="green" mode="screen" result="rg"/>
+                <feBlend in="rg" in2="blue" mode="screen"/>
+            </filter>
+            
+        </defs>
+    </svg>
+
+    <!-- Widget de Hora -->
+    <aside class="clock-widget" id="clockWidget" aria-label="Hora, data e última atualização" aria-live="polite">
+        <span class="clock-widget-time" id="clockTime" aria-label="Hora">--:--:--</span>
+        <span class="clock-widget-date" id="clockDate" aria-label="Data">--</span>
+        <span class="clock-widget-update">Atualizado às <time id="lastUpdate" datetime="">--:--</time></span>
+    </aside>
+
+    <!-- Widget de Clima -->
+    <aside class="weather-widget loading" id="weatherWidget" aria-label="Clima atual" aria-live="polite" aria-atomic="true">
+        <span class="weather-icon" aria-hidden="true"><img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Travel%20and%20places/Thermometer.png" alt="" width="32" height="32" loading="lazy" aria-hidden="true"></span>
+        <div class="weather-info">
+            <span class="weather-temp" id="weatherTemp" aria-label="Temperatura">--°C</span>
+            <span class="weather-condition" id="weatherCondition" aria-label="Condição climática">Carregando...</span>
+            <span class="weather-location" id="weatherLocation" aria-label="Localização"></span>
+        </div>
+    </aside>
+
+    <!-- Widget de Cotações de Moedas -->
+    <aside class="currency-ticker loading" id="currencyTicker" aria-label="Cotações de moedas" aria-live="polite">
+        <div class="currency-ticker-inner">
+            <span class="currency-ticker-label">💱 Câmbio</span>
+            <div class="currency-ticker-container">
+                <div class="currency-ticker-track" id="currencyTrack">
+                    <div class="currency-item">
+                        <span class="currency-flag">🇺🇸</span>
+                        <span class="currency-code">USD</span>
+                        <span class="currency-value">--</span>
+                    </div>
+                    <div class="currency-item">
+                        <span class="currency-flag">🇪🇺</span>
+                        <span class="currency-code">EUR</span>
+                        <span class="currency-value">--</span>
+                    </div>
+                    <div class="currency-item">
+                        <span class="currency-flag">🇬🇧</span>
+                        <span class="currency-code">GBP</span>
+                        <span class="currency-value">--</span>
+                    </div>
+                    <div class="currency-item">
+                        <span class="currency-flag">🇯🇵</span>
+                        <span class="currency-code">JPY</span>
+                        <span class="currency-value">--</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <main class="feeds-container" id="feedsContainer" aria-label="Feed de notícias" tabindex="-1">
+        <div class="loading" role="status" aria-live="polite">
+            <div class="loading-content">
+                <span class="loading-spinner" aria-hidden="true"></span>
+                Carregando...
+            </div>
+        </div>
+    </main>
+
+    <script>
+        'use strict';
+
+        /* Configuração */
+        const CONFIG = Object.freeze({
+            INTERVALO_ATUALIZACAO: 10 * 60 * 1000,
+            INTERVALO_CARROSSEL: 6000,
+            QTD_WIDGETS: 8,
+            ITENS_POR_WIDGET: 8,
+            MAX_TENTATIVAS: 3,
+            ATRASO_TENTATIVA: 2000,
+            URL_PROXY: 'https://api.allorigins.win/raw?url=',
+            PROXIES_RESERVA: ['https://corsproxy.io/?url='],
+            INTERVALO_CLIMA: 30 * 60 * 1000,
+            URL_API_CLIMA: 'https://api.open-meteo.com/v1/forecast',
+            INTERVALO_COTACOES: 15 * 60 * 1000,
+            URL_API_COTACOES: 'https://economia.awesomeapi.com.br/json/last',
+            MOEDAS: ['USD', 'EUR', 'GBP', 'JPY', 'CNY', 'ARS', 'BTC'],
+            DEPURAR: false
+        });
+
+        const log = (...args) => { if (CONFIG.DEPURAR) console.log(...args); };
+        const avisar = (...args) => { if (CONFIG.DEPURAR) console.warn(...args); };
+        const registrarErro = (...args) => { if (CONFIG.DEPURAR) console.error(...args); };
+
+        /* Fontes RSS */
+        const FEEDS_RSS = Object.freeze([
+            { name: 'G1', url: 'https://g1.globo.com/rss/g1/', maxItems: 10 },
+            { name: 'CenárioMT', url: 'https://cenariomt.com.br/mato-grosso/feed/', maxItems: 10 },
+            { name: 'Jornal de Mato Grosso', url: 'https://jornaldematogrosso.com.br/feed/4/mato-grosso/', maxItems: 10 },
+            { name: 'IGN Brasil', url: 'https://br.ign.com/feed.xml', maxItems: 10 },
+            { name: 'primeirapágina', url: 'https://primeirapagina.com.br/feed', maxItems: 10 },
+            { name: 'Canaltech', url: 'https://feeds2.feedburner.com/canaltechbr', maxItems: 10 },
+            { name: 'O GLOBO', url: 'https://oglobo.globo.com/rss/oglobo', maxItems: 10 },
+            { name: 'Metrópoles', url: 'https://www.metropoles.com/feed', maxItems: 10 },
+            { name: 'GOV.BR', url: 'https://www.gov.br/pt-br/noticias/mais-noticias/RSS', maxItems: 10 },
+            { name: 'CNN Brasil', url: 'https://www.cnnbrasil.com.br/feed', maxItems: 10 },
+        ]);
+
+        /* Estado da aplicação */
+        const EstadoApp = {
+            carouselTimers: new Map(),
+            isLoading: false,
+            lastFetchTime: null,
+            feedCache: new Map(),
+            retryCount: new Map()
+        };
+
+        /* Utilitários */
+        const Utilidades = {
+            atrasar(fn, delay) {
+                let timeoutId;
+                return function debounced(...args) {
+                    const context = this;
+                    clearTimeout(timeoutId);
+                    timeoutId = setTimeout(() => fn.apply(context, args), delay);
+                };
+            },
+
+            embaralharArray(array) {
+                if (!Array.isArray(array)) return [];
+                const shuffled = [...array];
+                for (let i = shuffled.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+                }
+                return shuffled;
+            },
+
+            esperar(ms) {
+                return new Promise(resolve => setTimeout(resolve, ms));
+            },
+
+            extrairDominio(url) {
+                try {
+                    return new URL(url).hostname.replace(/^www\./, '');
+                } catch {
+                    return 'fonte.com';
+                }
+            },
+
+            sanitizarLink(url) {
+                if (!url || typeof url !== 'string') return '#';
+                try {
+                    const u = new URL(url.trim());
+                    if (u.protocol === 'http:' || u.protocol === 'https:') return url.trim();
+                } catch (e) {}
+                return '#';
+            },
+
+            sanitizarUrlImagem(url) {
+                if (!url || typeof url !== 'string') return null;
+                try {
+                    const u = new URL(url.trim());
+                    if ((u.protocol !== 'http:' && u.protocol !== 'https:') || /['"\\]/.test(url)) return null;
+                    return url.trim();
+                } catch (e) {}
+                return null;
+            },
+
+            removerHtml(html) {
+                if (html == null || typeof html !== 'string') return '';
+                const doc = new DOMParser().parseFromString(html, 'text/html');
+                return doc.body ? (doc.body.textContent || '') : '';
+            },
+
+            escaparHtml(text) {
+                if (text == null) return '';
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            },
+
+            formatarDataRelativa(dateString) {
+                const date = new Date(dateString);
+                if (isNaN(date.getTime())) return '';
+                
+                const now = new Date();
+                const diffMs = now - date;
+                
+                // Trata datas futuras (problemas de fuso horário ou posts agendados)
+                if (diffMs < 0) {
+                    // Se menos de 5 minutos no futuro, trata como "agora"
+                    if (diffMs > -300000) return 'Agora';
+                    // Caso contrário, apenas mostra a data
+                    return date.toLocaleDateString('pt-BR', { 
+                        day: '2-digit', 
+                        month: 'short' 
+                    });
+                }
+                
+                const diffMins = Math.floor(diffMs / 60000);
+                const diffHours = Math.floor(diffMs / 3600000);
+                const diffDays = Math.floor(diffMs / 86400000);
+
+                if (diffMins < 1) return 'Agora';
+                if (diffMins < 60) return `${diffMins}m`;
+                if (diffHours < 24) return `${diffHours}h`;
+                if (diffDays < 7) return `${diffDays}d`;
+                
+                return date.toLocaleDateString('pt-BR', { 
+                    day: '2-digit', 
+                    month: 'short' 
+                });
+            }
+        };
+
+        /* Clima */
+        const ControladorClima = {
+            refreshInterval: null,
+            currentLocation: null,
+            currentCity: null,
+            
+            weatherEmojiBaseUrl: 'https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Travel%20and%20places/',
+
+            weatherEmojiFiles: {
+                0: 'Sun.png',
+                1: 'Sun Behind Small Cloud.png',
+                2: 'Sun Behind Cloud.png',
+                3: 'Cloud.png',
+                45: 'Fog.png',
+                48: 'Foggy.png',
+                51: 'Sun Behind Rain Cloud.png',
+                53: 'Sun Behind Rain Cloud.png',
+                55: 'Sun Behind Rain Cloud.png',
+                56: 'Cloud with Snow.png',
+                57: 'Cloud with Snow.png',
+                61: 'Cloud with Rain.png',
+                63: 'Cloud with Rain.png',
+                65: 'Cloud with Rain.png',
+                66: 'Cloud with Snow.png',
+                67: 'Cloud with Snow.png',
+                71: 'Cloud with Snow.png',
+                73: 'Cloud with Snow.png',
+                75: 'Snowflake.png',
+                77: 'Cloud with Snow.png',
+                80: 'Sun Behind Rain Cloud.png',
+                81: 'Cloud with Rain.png',
+                82: 'Cloud with Lightning and Rain.png',
+                85: 'Cloud with Snow.png',
+                86: 'Snowflake.png',
+                95: 'Cloud with Lightning and Rain.png',
+                96: 'Cloud with Lightning.png',
+                99: 'Cloud with Lightning.png'
+            },
+
+            weatherDescriptions: {
+                0: 'Céu limpo',
+                1: 'Predominantemente limpo',
+                2: 'Parcialmente nublado',
+                3: 'Nublado',
+                45: 'Névoa',
+                48: 'Névoa com geada',
+                51: 'Garoa leve',
+                53: 'Garoa moderada',
+                55: 'Garoa intensa',
+                56: 'Garoa congelante leve',
+                57: 'Garoa congelante',
+                61: 'Chuva leve',
+                63: 'Chuva moderada',
+                65: 'Chuva forte',
+                66: 'Chuva congelante leve',
+                67: 'Chuva congelante',
+                71: 'Neve leve',
+                73: 'Neve moderada',
+                75: 'Neve intensa',
+                77: 'Grãos de neve',
+                80: 'Pancadas leves',
+                81: 'Pancadas moderadas',
+                82: 'Pancadas intensas',
+                85: 'Neve leve',
+                86: 'Neve intensa',
+                95: 'Tempestade',
+                96: 'Tempestade com granizo',
+                99: 'Tempestade severa'
+            },
+
+            /**
+             * Obtém localização do usuário via API de Geolocalização
+             */
+            async obterLocalizacao() {
+                return new Promise((resolve, reject) => {
+                    if (!navigator.geolocation) {
+                        reject(new Error('Geolocalização não suportada'));
+                        return;
+                    }
+
+                    navigator.geolocation.getCurrentPosition(
+                        position => resolve({
+                            lat: position.coords.latitude,
+                            lon: position.coords.longitude
+                        }),
+                        error => reject(error),
+                        { timeout: 10000, maximumAge: 300000 }
+                    );
+                });
+            },
+
+            /**
+             * Busca dados do clima da API Open-Meteo
+             */
+            async buscarClima(lat, lon) {
+                const url = `${CONFIG.URL_API_CLIMA}?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code&timezone=auto`;
+                
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`Erro na API de clima: ${response.status}`);
+                }
+                
+                // Valida tipo de conteúdo
+                const contentType = response.headers.get('content-type');
+                if (!contentType?.includes('application/json')) {
+                    throw new Error('API de clima retornou resposta não-JSON');
+                }
+                
+                const data = await response.json();
+                
+                // Valida campos obrigatórios
+                if (!data.current || typeof data.current.temperature_2m === 'undefined') {
+                    throw new Error('Resposta da API de clima sem campos obrigatórios');
+                }
+                
+                return data;
+            },
+
+            /**
+             * Obtém nome da cidade a partir de coordenadas usando geocodificação reversa
+             * @param {number} lat - Latitude
+             * @param {number} lon - Longitude
+             * @returns {Promise<string|null>} Nome da cidade ou null
+             */
+            async obterNomeCidade(lat, lon) {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 5000); // Timeout de 5 segundos
+                
+                try {
+                    const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&zoom=10`;
+                    const response = await fetch(url, {
+                        headers: { 'Accept-Language': 'pt-BR' },
+                        signal: controller.signal
+                    });
+                    
+                    clearTimeout(timeoutId);
+                    
+                    if (!response.ok) return null;
+                    
+                    const data = await response.json();
+                    return data.address?.city || 
+                           data.address?.town || 
+                           data.address?.municipality ||
+                           data.address?.state ||
+                           null;
+                } catch (error) {
+                    clearTimeout(timeoutId);
+                    avisar('Geocodificação falhou:', error.name === 'AbortError' ? 'Timeout' : error.message);
+                    return null;
+                }
+            },
+
+            urlIconeClima(weatherCode) {
+                const file = this.weatherEmojiFiles[weatherCode] || 'Thermometer.png';
+                return this.weatherEmojiBaseUrl + encodeURIComponent(file);
+            },
+
+            /**
+             * Atualiza a interface do widget de clima
+             */
+            atualizarInterface(data, cityName = null) {
+                const widget = document.getElementById('weatherWidget');
+                const iconEl = widget?.querySelector('.weather-icon');
+                const tempEl = document.getElementById('weatherTemp');
+                const conditionEl = document.getElementById('weatherCondition');
+                const locationEl = document.getElementById('weatherLocation');
+
+                if (!widget || !tempEl || !conditionEl) return;
+                if (!data?.current || typeof data.current.temperature_2m === 'undefined') return;
+
+                const weatherCode = data.current.weather_code;
+                const temperature = Math.round(data.current.temperature_2m);
+                
+                // Adiciona animação de atualização
+                widget.classList.add('updating');
+                widget.classList.remove('loading');
+
+                // Atualiza ícone
+                if (iconEl) {
+                    const src = this.urlIconeClima(weatherCode);
+                    iconEl.innerHTML = '<img src="' + src + '" alt="" width="32" height="32" loading="lazy" aria-hidden="true">';
+                }
+                tempEl.textContent = `${temperature}°C`;
+                conditionEl.textContent = this.weatherDescriptions[weatherCode] || 'Desconhecido';
+                
+                if (locationEl && cityName) {
+                    locationEl.textContent = cityName;
+                }
+
+                // Remove classe de animação após conclusão
+                setTimeout(() => {
+                    widget.classList.remove('updating');
+                }, 400);
+            },
+
+            /**
+             * Mostra estado de erro
+             */
+            mostrarErro() {
+                const widget = document.getElementById('weatherWidget');
+                const iconEl = widget?.querySelector('.weather-icon');
+                const tempEl = document.getElementById('weatherTemp');
+                const conditionEl = document.getElementById('weatherCondition');
+
+                if (widget) widget.classList.remove('loading');
+                if (iconEl) {
+                    const src = this.weatherEmojiBaseUrl + 'Thermometer.png';
+                    iconEl.innerHTML = '<img src="' + src + '" alt="" width="32" height="32" loading="lazy" aria-hidden="true">';
+                }
+                if (tempEl) tempEl.textContent = '--°C';
+                if (conditionEl) conditionEl.textContent = 'Indisponível';
+            },
+
+            /**
+             * Inicializa widget de clima
+             */
+            async iniciar() {
+                // Limpa intervalo existente para prevenir duplicatas
+                if (this.refreshInterval) {
+                    clearInterval(this.refreshInterval);
+                    this.refreshInterval = null;
+                }
+                
+                try {
+                    // Obtém localização do usuário
+                    const location = await this.obterLocalizacao();
+                    
+                    // Busca dados do clima
+                    const weatherData = await this.buscarClima(location.lat, location.lon);
+                    
+                    // Obtém nome da cidade (não-bloqueante)
+                    const cityName = await this.obterNomeCidade(location.lat, location.lon);
+                    
+                    // Atualiza interface
+                    this.atualizarInterface(weatherData, cityName);
+                    
+                    // Armazena localização para atualização
+                    this.currentLocation = location;
+                    this.currentCity = cityName;
+                    
+                    // Agenda atualização periódica (armazena referência para limpar depois se necessário)
+                    this.refreshInterval = setInterval(() => this.atualizar(), CONFIG.INTERVALO_CLIMA);
+                    
+                } catch (error) {
+                    avisar('Erro ao carregar clima:', error.message);
+                    this.mostrarErro();
+                }
+            },
+            
+            /**
+             * Limpa recursos
+             */
+            destruir() {
+                if (this.refreshInterval) {
+                    clearInterval(this.refreshInterval);
+                    this.refreshInterval = null;
+                }
+            },
+
+            /**
+             * Atualiza dados do clima
+             */
+            async atualizar() {
+                if (!this.currentLocation) return;
+                
+                try {
+                    const weatherData = await this.buscarClima(
+                        this.currentLocation.lat, 
+                        this.currentLocation.lon
+                    );
+                    this.atualizarInterface(weatherData, this.currentCity);
+                } catch (error) {
+                    avisar('Erro ao atualizar clima:', error.message);
+                }
+            }
+        };
+
+        /* Cotações */
+        const ControladorCotacoes = {
+            refreshInterval: null,
+            retryTimeoutId: null,
+            ultimasCotacoes: null,
+            
+            // Mapeamento de bandeiras por código de moeda
+            bandeiras: {
+                USD: '🇺🇸',
+                EUR: '🇪🇺',
+                GBP: '🇬🇧',
+                JPY: '🇯🇵',
+                CNY: '🇨🇳',
+                ARS: '🇦🇷',
+                BTC: '₿',
+                CAD: '🇨🇦',
+                AUD: '🇦🇺',
+                CHF: '🇨🇭'
+            },
+            
+            // Nomes das moedas
+            nomesMoedas: {
+                USD: 'Dólar',
+                EUR: 'Euro',
+                GBP: 'Libra',
+                JPY: 'Iene',
+                CNY: 'Yuan',
+                ARS: 'Peso Arg.',
+                BTC: 'Bitcoin',
+                CAD: 'Dólar Can.',
+                AUD: 'Dólar Aus.',
+                CHF: 'Franco Suíço'
+            },
+            
+            /**
+             * Busca cotações da API
+             */
+            async buscarCotacoes() {
+                const moedas = CONFIG.MOEDAS.join('-BRL,') + '-BRL';
+                const url = `${CONFIG.URL_API_COTACOES}/${moedas}`;
+                
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 10000);
+                
+                try {
+                    const response = await fetch(url, { signal: controller.signal });
+                    clearTimeout(timeoutId);
+                    
+                    if (!response.ok) {
+                        throw new Error(`Erro na API: ${response.status}`);
+                    }
+                    
+                    const contentType = response.headers.get('content-type');
+                    if (!contentType?.includes('application/json')) {
+                        throw new Error('API retornou resposta não-JSON');
+                    }
+                    
+                    return await response.json();
+                } catch (error) {
+                    clearTimeout(timeoutId);
+                    throw error;
+                }
+            },
+            
+            /**
+             * Formata valor da cotação
+             */
+            formatarValor(valor, codigo) {
+                const num = parseFloat(valor);
+                if (Number.isNaN(num)) return '--';
+                
+                // Bitcoin tem muitas casas decimais
+                if (codigo === 'BTC') {
+                    return num.toLocaleString('pt-BR', { 
+                        style: 'currency', 
+                        currency: 'BRL',
+                        minimumFractionDigits: 0,
+                        maximumFractionDigits: 0
+                    });
+                }
+                
+                // Iene tem valor baixo, mostrar mais casas
+                if (codigo === 'JPY') {
+                    return num.toLocaleString('pt-BR', { 
+                        style: 'currency', 
+                        currency: 'BRL',
+                        minimumFractionDigits: 4,
+                        maximumFractionDigits: 4
+                    });
+                }
+                
+                return num.toLocaleString('pt-BR', { 
+                    style: 'currency', 
+                    currency: 'BRL',
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                });
+            },
+            
+            /**
+             * Formata variação percentual
+             */
+            formatarVariacao(variacao) {
+                const num = parseFloat(variacao);
+                if (Number.isNaN(num)) return '0.00%';
+                const sinal = num > 0 ? '+' : '';
+                return `${sinal}${num.toFixed(2)}%`;
+            },
+            
+            /**
+             * Determina classe CSS da variação
+             */
+            obterClasseVariacao(variacao) {
+                const num = parseFloat(variacao);
+                if (num > 0) return 'positive';
+                if (num < 0) return 'negative';
+                return 'neutral';
+            },
+            
+            /**
+             * Renderiza os itens de cotação
+             */
+            renderizarCotacoes(dados) {
+                const track = document.getElementById('currencyTrack');
+                if (!track) return;
+                
+                if (!dados || typeof dados !== 'object' || Array.isArray(dados)) return;
+                
+                const itens = CONFIG.MOEDAS.map(codigo => {
+                    const chave = `${codigo}BRL`;
+                    const cotacao = dados[chave];
+                    
+                    if (!cotacao || typeof cotacao !== 'object') return '';
+                    
+                    const bandeira = this.bandeiras[codigo] || '💱';
+                    const valor = this.formatarValor(cotacao.bid, codigo);
+                    const variacao = this.formatarVariacao(cotacao.pctChange);
+                    const classeVariacao = this.obterClasseVariacao(cotacao.pctChange);
+                    const tituloSeguro = Utilidades.escaparHtml(`${this.nomesMoedas[codigo] || codigo}: ${valor}`);
+                    const valorSeguro = Utilidades.escaparHtml(String(valor));
+                    const variacaoSegura = Utilidades.escaparHtml(String(variacao));
+                    
+                    return `
+                        <div class="currency-item" title="${tituloSeguro}">
+                            <span class="currency-flag" aria-hidden="true">${bandeira}</span>
+                            <span class="currency-code">${codigo}</span>
+                            <span class="currency-value">${valorSeguro}</span>
+                            <span class="currency-change ${classeVariacao}" aria-label="Variação: ${variacaoSegura}">${variacaoSegura}</span>
+                        </div>
+                    `;
+                }).join('');
+                
+                // Duplica os itens para criar efeito de loop infinito
+                track.innerHTML = itens + itens;
+                
+                // Ajusta a duração da animação baseado no número de itens
+                const numItens = CONFIG.MOEDAS.length;
+                const duracao = numItens * 4; // 4 segundos por item
+                track.style.setProperty('--ticker-duration', `${duracao}s`);
+            },
+            
+            /**
+             * Atualiza interface com os dados
+             */
+            atualizarInterface(dados) {
+                const widget = document.getElementById('currencyTicker');
+                if (!widget) return;
+                
+                const dadosValidos = dados && typeof dados === 'object' && !Array.isArray(dados);
+                widget.classList.remove('loading');
+                if (dadosValidos) {
+                    this.renderizarCotacoes(dados);
+                    this.ultimasCotacoes = dados;
+                }
+            },
+            
+            /**
+             * Mostra estado de erro
+             */
+            mostrarErro() {
+                const widget = document.getElementById('currencyTicker');
+                const track = document.getElementById('currencyTrack');
+                
+                if (widget) widget.classList.remove('loading');
+                
+                if (track && !this.ultimasCotacoes) {
+                    track.innerHTML = `
+                        <div class="currency-item">
+                            <span class="currency-flag">⚠️</span>
+                            <span class="currency-value" style="opacity: 0.6;">Cotações indisponíveis</span>
+                        </div>
+                    `;
+                }
+            },
+            
+            /**
+             * Inicializa o widget de cotações
+             */
+            async iniciar() {
+                // Limpa intervalo existente
+                if (this.refreshInterval) {
+                    clearInterval(this.refreshInterval);
+                    this.refreshInterval = null;
+                }
+                
+                try {
+                    const dados = await this.buscarCotacoes();
+                    this.atualizarInterface(dados);
+                    
+                    // Configura atualização periódica
+                    this.refreshInterval = setInterval(() => this.atualizar(), CONFIG.INTERVALO_COTACOES);
+                    
+                    log('[App] Widget de cotações inicializado');
+                } catch (error) {
+                    avisar('Erro ao carregar cotações:', error.message);
+                    this.mostrarErro();
+                    
+                    // Tenta novamente após 30 segundos
+                    if (this.retryTimeoutId != null) clearTimeout(this.retryTimeoutId);
+                    this.retryTimeoutId = setTimeout(() => this.iniciar(), 30000);
+                }
+            },
+            
+            /**
+             * Limpa recursos
+             */
+            destruir() {
+                if (this.retryTimeoutId != null) {
+                    clearTimeout(this.retryTimeoutId);
+                    this.retryTimeoutId = null;
+                }
+                if (this.refreshInterval) {
+                    clearInterval(this.refreshInterval);
+                    this.refreshInterval = null;
+                }
+            },
+            
+            /**
+             * Atualiza cotações
+             */
+            async atualizar() {
+                try {
+                    const dados = await this.buscarCotacoes();
+                    this.atualizarInterface(dados);
+                } catch (error) {
+                    avisar('Erro ao atualizar cotações:', error.message);
+                }
+            }
+        };
+
+        /* Relógio */
+        const ControladorRelogio = {
+            tickInterval: null,
+            diasSemana: ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'],
+            meses: ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'],
+
+            formatarHora(now) {
+                const h = now.getHours();
+                const m = now.getMinutes();
+                const s = now.getSeconds();
+                return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+            },
+
+            formatarDia(now) {
+                if (!(now instanceof Date) || isNaN(now.getTime())) return '—';
+                const dia = this.diasSemana[now.getDay()];
+                const d = now.getDate();
+                const mes = this.meses[now.getMonth()];
+                return `${dia}, ${d} de ${mes}`;
+            },
+
+            atualizar() {
+                const timeEl = document.getElementById('clockTime');
+                const dateEl = document.getElementById('clockDate');
+                if (!timeEl || !dateEl) return;
+                const now = new Date();
+                timeEl.textContent = this.formatarHora(now);
+                dateEl.textContent = this.formatarDia(now);
+                timeEl.setAttribute('datetime', now.toISOString());
+            },
+
+            iniciar() {
+                if (this.tickInterval) {
+                    clearInterval(this.tickInterval);
+                    this.tickInterval = null;
+                }
+                this.atualizar();
+                this.tickInterval = setInterval(() => this.atualizar(), 1000);
+            },
+
+            destruir() {
+                if (this.tickInterval) {
+                    clearInterval(this.tickInterval);
+                    this.tickInterval = null;
+                }
+            }
+        };
+
+        /* Parser RSS */
+        const AnalisadorRSS = {
+            /**
+             * Extrai URL de imagem do conteúdo HTML
+             */
+            extrairImagemDoHTML(html) {
+                if (!html) return null;
+                
+                // Tenta encontrar tag img com src
+                const imgMatch = html.match(/<img[^>]+src=["']([^"']+)["']/i);
+                if (imgMatch?.[1]) {
+                    const url = imgMatch[1];
+                    // Filtra pixels de rastreamento e imagens pequenas
+                    if (!url.includes('1x1') && 
+                        !url.includes('tracking') && 
+                        !url.includes('pixel') &&
+                        !url.includes('spacer')) {
+                        return url;
+                    }
+                }
+                
+                // Tenta encontrar og:image ou outros padrões de imagem
+                const srcMatch = html.match(/(?:src|href)=["']([^"']+\.(?:jpg|jpeg|png|webp|gif))/i);
+                return srcMatch?.[1] || null;
+            },
+
+            /**
+             * Analisa documento XML RSS/Atom
+             */
+            analisarXML(xmlText, feedName) {
+                if (xmlText == null || typeof xmlText !== 'string') throw new Error(`Conteúdo inválido para ${feedName}`);
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
+                
+                // Verifica erros de análise
+                const parseError = xmlDoc.querySelector('parsererror');
+                if (parseError) {
+                    throw new Error(`Erro ao analisar XML para ${feedName}`);
+                }
+
+                // Detecta tipo de feed (Atom vs RSS)
+                const isAtom = !!xmlDoc.querySelector('feed');
+                const channel = isAtom ? xmlDoc.querySelector('feed') : xmlDoc.querySelector('channel');
+                
+                if (!channel) {
+                    throw new Error(`Estrutura de feed inválida para ${feedName}`);
+                }
+
+                // Obtém título do feed
+                const feedTitle = channel.querySelector('title')?.textContent || feedName;
+
+                // Obtém itens/entradas
+                const itemElements = isAtom 
+                    ? Array.from(xmlDoc.querySelectorAll('entry'))
+                    : Array.from(xmlDoc.querySelectorAll('item'));
+
+                const items = itemElements.map(item => {
+                    return isAtom 
+                        ? this.analisarEntradaAtom(item, feedName)
+                        : this.analisarItemRSS(item, feedName);
+                }).filter(item => item.title && item.title !== 'Sem título');
+
+                return { feed: { title: feedTitle }, items };
+            },
+
+            /**
+             * Analisa entrada Atom
+             */
+            analisarEntradaAtom(entry, feedName) {
+                const content = entry.querySelector('content')?.textContent || '';
+                const summary = entry.querySelector('summary')?.textContent || '';
+                const thumbnail = this.extrairImagemDoHTML(content) || this.extrairImagemDoHTML(summary);
+                const linkEl = entry.querySelector('link[rel="alternate"], link');
+                
+                return {
+                    title: Utilidades.removerHtml(entry.querySelector('title')?.textContent) || 'Sem título',
+                    link: linkEl?.getAttribute('href') || '#',
+                    description: summary || content,
+                    pubDate: entry.querySelector('published')?.textContent || 
+                            entry.querySelector('updated')?.textContent || 
+                            new Date().toISOString(),
+                    thumbnail,
+                    source: feedName
+                };
+            },
+
+            /**
+             * Analisa item RSS
+             */
+            analisarItemRSS(item, feedName) {
+                let thumbnail = null;
+                
+                // Tenta várias fontes de thumbnail
+                const mediaThumbnail = item.querySelector('thumbnail');
+                if (mediaThumbnail) {
+                    thumbnail = mediaThumbnail.getAttribute('url');
+                }
+                
+                if (!thumbnail) {
+                    const mediaContent = item.querySelector('content[url]');
+                    if (mediaContent) {
+                        thumbnail = mediaContent.getAttribute('url');
+                    }
+                }
+                
+                if (!thumbnail) {
+                    const enclosure = item.querySelector('enclosure');
+                    if (enclosure?.getAttribute('type')?.startsWith('image/')) {
+                        thumbnail = enclosure.getAttribute('url');
+                    }
+                }
+                
+                if (!thumbnail) {
+                    const description = item.querySelector('description')?.textContent || '';
+                    const encoded = item.querySelector('encoded')?.textContent || '';
+                    thumbnail = this.extrairImagemDoHTML(description + encoded);
+                }
+                
+                return {
+                    title: Utilidades.removerHtml(item.querySelector('title')?.textContent) || 'Sem título',
+                    link: item.querySelector('link')?.textContent || '#',
+                    description: item.querySelector('description')?.textContent || '',
+                    pubDate: item.querySelector('pubDate')?.textContent || new Date().toISOString(),
+                    thumbnail,
+                    source: feedName
+                };
+            }
+        };
+
+        /* Busca de feeds */
+        const BuscadorFeed = {
+            /**
+             * Busca um único feed com lógica de tentativas
+             */
+            async buscarFeed(feedConfig, proxyIndex = 0) {
+                if (!feedConfig?.url) throw new Error('Configuração de feed inválida');
+                const retryKey = feedConfig.url;
+                const currentRetry = EstadoApp.retryCount.get(retryKey) || 0;
+                let timeoutId;
+                
+                try {
+                    // Usa proxy primário primeiro (índice 0), depois fallbacks
+                    const proxy = proxyIndex === 0 
+                        ? CONFIG.URL_PROXY 
+                        : CONFIG.PROXIES_RESERVA[proxyIndex - 1];
+                    
+                    // Se não há mais proxies disponíveis, usa o primário
+                    if (!proxy) {
+                        throw new Error('Nenhum proxy disponível');
+                    }
+                    
+                    const proxyUrl = `${proxy}${encodeURIComponent(feedConfig.url)}`;
+                    
+                    const controller = new AbortController();
+                    timeoutId = setTimeout(() => controller.abort(), 15000);
+                    
+                    const response = await fetch(proxyUrl, {
+                        signal: controller.signal,
+                        headers: {
+                            'Accept': 'application/rss+xml, application/xml, text/xml, */*'
+                        }
+                    });
+                    
+                    clearTimeout(timeoutId);
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+                    
+                    const xmlText = await response.text();
+                    const data = AnalisadorRSS.analisarXML(xmlText, feedConfig.name);
+                    
+                    // Reseta contador de tentativas em caso de sucesso
+                    EstadoApp.retryCount.delete(retryKey);
+                    
+                    // Armazena resultado em cache
+                    EstadoApp.feedCache.set(feedConfig.url, {
+                        data,
+                        timestamp: Date.now()
+                    });
+                    
+                    return {
+                        ...feedConfig,
+                        feed: data.feed,
+                        items: data.items.slice(0, feedConfig.maxItems || 10)
+                    };
+                    
+                } catch (err) {
+                    if (timeoutId != null) clearTimeout(timeoutId);
+                    avisar(`Erro ao carregar ${feedConfig.name} (tentativa ${currentRetry + 1}):`, err.message);
+                    
+                    // Tenta próximo proxy (0 = primário, 1+ = fallbacks)
+                    const totalProxies = 1 + CONFIG.PROXIES_RESERVA.length;
+                    if (proxyIndex < totalProxies - 1) {
+                        return this.buscarFeed(feedConfig, proxyIndex + 1);
+                    }
+                    
+                    // Tenta novamente com atraso
+                    if (currentRetry < CONFIG.MAX_TENTATIVAS) {
+                        EstadoApp.retryCount.set(retryKey, currentRetry + 1);
+                        await Utilidades.esperar(CONFIG.ATRASO_TENTATIVA * (currentRetry + 1));
+                        return this.buscarFeed(feedConfig, 0);
+                    }
+                    
+                    // Verifica cache para fallback
+                    const cached = EstadoApp.feedCache.get(feedConfig.url);
+                    if (cached) {
+                        log(`Usando cache para ${feedConfig.name}`);
+                        return {
+                            ...feedConfig,
+                            feed: cached.data.feed,
+                            items: cached.data.items.slice(0, feedConfig.maxItems || 10),
+                            fromCache: true
+                        };
+                    }
+                    
+                    return {
+                        ...feedConfig,
+                        error: err.message
+                    };
+                }
+            },
+
+            /**
+             * Busca todos os feeds concorrentemente
+             */
+            async buscarTodosFeeds() {
+                const feedPromises = FEEDS_RSS.map(feed => this.buscarFeed(feed));
+                return Promise.all(feedPromises);
+            }
+        };
+
+        /* Agregação de notícias */
+        const AgregadorNoticias = {
+            /**
+             * Coleta todas as notícias de todos os feeds e distribui aleatoriamente pelos widgets
+             */
+            agregarEDistribuir(feedResults) {
+                if (!Array.isArray(feedResults)) return this.criarWidgetsDeErro([]);
+                // Coleta todos os itens de notícias válidos com informação da fonte
+                const allNews = [];
+                
+                feedResults.forEach(feed => {
+                    if (feed.error || !feed.items) return;
+                    
+                    feed.items.forEach(item => {
+                        allNews.push({
+                            ...item,
+                            sourceFeed: feed.name,
+                            sourceUrl: feed.url
+                        });
+                    });
+                });
+                
+                if (allNews.length === 0) {
+                    return this.criarWidgetsDeErro(feedResults);
+                }
+                
+                // Embaralha todas as notícias aleatoriamente
+                const shuffledNews = Utilidades.embaralharArray(allNews);
+                
+                // Distribui pelos widgets
+                const widgets = [];
+                const itemsPerWidget = CONFIG.ITENS_POR_WIDGET;
+                const widgetCount = Math.min(CONFIG.QTD_WIDGETS, Math.ceil(shuffledNews.length / itemsPerWidget));
+                
+                for (let i = 0; i < widgetCount; i++) {
+                    const startIdx = i * itemsPerWidget;
+                    const endIdx = Math.min(startIdx + itemsPerWidget, shuffledNews.length);
+                    const widgetItems = shuffledNews.slice(startIdx, endIdx);
+                    
+                    // Se acabarem as notícias, faz loop
+                    if (widgetItems.length < itemsPerWidget && shuffledNews.length > 0) {
+                        const remaining = itemsPerWidget - widgetItems.length;
+                        const extraItems = Utilidades.embaralharArray(shuffledNews).slice(0, remaining);
+                        widgetItems.push(...extraItems);
+                    }
+                    
+                    widgets.push({
+                        name: `Widget ${i + 1}`,
+                        items: widgetItems,
+                        isMixed: true
+                    });
+                }
+                
+                return widgets;
+            },
+
+            /**
+             * Cria widgets de erro quando todos os feeds falham
+             */
+            criarWidgetsDeErro(feedResults) {
+                const errorFeeds = feedResults.filter(f => f.error);
+                return [{
+                    name: 'Erro',
+                    error: `Falha ao carregar ${errorFeeds.length} feed(s)`,
+                    items: []
+                }];
+            }
+        };
+
+        /* Carrossel */
+        const ControladorCarrossel = {
+            /**
+             * Inicializa carrossel para um widget
+             */
+            iniciarCarrossel(widgetElement, itemCount) {
+                if (!widgetElement || itemCount <= 1) return;
+                
+                const carouselItems = widgetElement.querySelectorAll('.carousel-item');
+                const indicators = widgetElement.querySelectorAll('.indicator');
+                let currentIndex = 0;
+                let isPaused = false;
+
+                const atualizarCarrossel = (newIndex) => {
+                    // Atualiza item antigo
+                    const oldItem = carouselItems[currentIndex];
+                    if (oldItem) {
+                        oldItem.classList.remove('active');
+                        oldItem.setAttribute('aria-hidden', 'true');
+                        // Torna links não-focáveis
+                        const oldLink = oldItem.querySelector('a');
+                        if (oldLink) oldLink.setAttribute('tabindex', '-1');
+                    }
+                    indicators[currentIndex]?.classList.remove('active');
+                    indicators[currentIndex]?.setAttribute('aria-selected', 'false');
+                    indicators[currentIndex]?.setAttribute('tabindex', '-1');
+                    
+                    currentIndex = newIndex;
+                    
+                    // Atualiza novo item
+                    const newItem = carouselItems[currentIndex];
+                    if (newItem) {
+                        newItem.classList.add('active');
+                        newItem.setAttribute('aria-hidden', 'false');
+                        // Torna links focáveis
+                        const newLink = newItem.querySelector('a');
+                        if (newLink) newLink.setAttribute('tabindex', '0');
+                    }
+                    indicators[currentIndex]?.classList.add('active');
+                    indicators[currentIndex]?.setAttribute('aria-selected', 'true');
+                    indicators[currentIndex]?.setAttribute('tabindex', '0');
+                    
+                    // Reinicia a animação de progresso forçando um reflow
+                    const activeIndicator = indicators[currentIndex];
+                    if (activeIndicator) {
+                        activeIndicator.style.animation = 'none';
+                        activeIndicator.offsetHeight; // Força reflow
+                        activeIndicator.style.animation = '';
+                    }
+                };
+
+                const proximoSlide = () => {
+                    if (!isPaused) {
+                        atualizarCarrossel((currentIndex + 1) % itemCount);
+                    }
+                };
+                
+                const slideAnterior = () => {
+                    atualizarCarrossel((currentIndex - 1 + itemCount) % itemCount);
+                };
+
+                // Reseta timer após navegação manual
+                const resetarTimer = () => {
+                    const estado = EstadoApp.carouselTimers.get(widgetElement);
+                    if (estado) {
+                        clearInterval(estado.timer);
+                        const newTimer = setInterval(proximoSlide, CONFIG.INTERVALO_CARROSSEL);
+                        EstadoApp.carouselTimers.set(widgetElement, { 
+                            ...estado, 
+                            timer: newTimer 
+                        });
+                    }
+                };
+
+                // Handler de clique nos indicadores
+                const handleIndicatorClick = (index) => () => {
+                    atualizarCarrossel(index);
+                    resetarTimer();
+                };
+
+                // Handler de navegação por teclado
+                const handleKeyDown = (event) => {
+                    switch (event.key) {
+                        case 'ArrowLeft':
+                        case 'ArrowUp':
+                            event.preventDefault();
+                            slideAnterior();
+                            resetarTimer();
+                            break;
+                        case 'ArrowRight':
+                        case 'ArrowDown':
+                            event.preventDefault();
+                            atualizarCarrossel((currentIndex + 1) % itemCount);
+                            resetarTimer();
+                            break;
+                        case 'Home':
+                            event.preventDefault();
+                            atualizarCarrossel(0);
+                            resetarTimer();
+                            break;
+                        case 'End':
+                            event.preventDefault();
+                            atualizarCarrossel(itemCount - 1);
+                            resetarTimer();
+                            break;
+                    }
+                };
+
+                // Handler de hover
+                const handleMouseEnter = () => { isPaused = true; };
+                const handleMouseLeave = () => { isPaused = false; };
+
+                // Armazena handlers para remoção posterior
+                const indicatorHandlers = [];
+
+                // Adiciona handlers de clique nos indicadores
+                indicators.forEach((indicator, index) => {
+                    const handler = handleIndicatorClick(index);
+                    indicatorHandlers.push({ element: indicator, handler });
+                    indicator.addEventListener('click', handler);
+                });
+
+                // Adiciona navegação por teclado no container de indicadores
+                const indicatorsContainer = widgetElement.querySelector('.carousel-indicators');
+                if (indicatorsContainer) {
+                    indicatorsContainer.addEventListener('keydown', handleKeyDown);
+                }
+
+                // Pausa no hover
+                widgetElement.addEventListener('mouseenter', handleMouseEnter);
+                widgetElement.addEventListener('mouseleave', handleMouseLeave);
+
+                // Inicia rotação automática
+                const timer = setInterval(proximoSlide, CONFIG.INTERVALO_CARROSSEL);
+                
+                // Armazena estado e handlers para limpeza
+                EstadoApp.carouselTimers.set(widgetElement, { 
+                    timer, 
+                    isPaused: false,
+                    handlers: {
+                        indicatorHandlers,
+                        keydownHandler: handleKeyDown,
+                        mouseEnterHandler: handleMouseEnter,
+                        mouseLeaveHandler: handleMouseLeave,
+                        indicatorsContainer
+                    }
+                });
+            },
+
+            /**
+             * Limpa todos os timers e event listeners do carrossel
+             */
+            limparTodosTimers() {
+                EstadoApp.carouselTimers.forEach((estado, widgetElement) => {
+                    // Limpa timer
+                    clearInterval(estado.timer);
+                    
+                    // Remove event listeners se existirem
+                    if (estado.handlers) {
+                        // Remove handlers dos indicadores
+                        estado.handlers.indicatorHandlers?.forEach(({ element, handler }) => {
+                            element.removeEventListener('click', handler);
+                        });
+                        
+                        // Remove handler de teclado
+                        if (estado.handlers.indicatorsContainer && estado.handlers.keydownHandler) {
+                            estado.handlers.indicatorsContainer.removeEventListener('keydown', estado.handlers.keydownHandler);
+                        }
+                        
+                        // Remove handlers de hover
+                        if (estado.handlers.mouseEnterHandler) {
+                            widgetElement.removeEventListener('mouseenter', estado.handlers.mouseEnterHandler);
+                        }
+                        if (estado.handlers.mouseLeaveHandler) {
+                            widgetElement.removeEventListener('mouseleave', estado.handlers.mouseLeaveHandler);
+                        }
+                    }
+                });
+                EstadoApp.carouselTimers.clear();
+            }
+        };
+
+        /* Renderização */
+        const Renderizador = {
+            /**
+             * Cores de gradiente de fallback para cartões sem imagens
+             */
+            fallbackGradients: [
+                'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+                'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+                'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
+                'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
+                'linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%)',
+                'linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)',
+                'linear-gradient(135deg, #30cfd0 0%, #330867 100%)'
+            ],
+
+            /**
+             * Obtém gradiente de fallback consistente baseado no título do item
+             */
+            obterGradienteFallback(title) {
+                const str = title != null ? String(title) : '';
+                const hash = str.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+                return this.fallbackGradients[hash % this.fallbackGradients.length];
+            },
+
+            /**
+             * Renderiza um único cartão de notícia
+             */
+            renderizarCartaoNoticia(item, index) {
+                if (!item || typeof item !== 'object') {
+                    return `<div class="carousel-item ${index === 0 ? 'active' : ''}" role="tabpanel" aria-hidden="${index !== 0}">
+                        <article class="feed-item" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                            <div class="item-content"><h3 class="item-title"><a href="#" tabindex="-1">Sem título</a></h3><div class="item-meta"><span class="item-source">—</span></div></div>
+                        </article>
+                    </div>`;
+                }
+                const fallbackGradient = this.obterGradienteFallback(item.title);
+                const thumbnailSegura = Utilidades.sanitizarUrlImagem(item.thumbnail);
+                const backgroundStyle = thumbnailSegura
+                    ? `background-image: url('${Utilidades.escaparHtml(thumbnailSegura)}');`
+                    : `background: ${fallbackGradient};`;
+                
+                // Atributo data para fallback em erro de imagem
+                const dataFallback = thumbnailSegura ? `data-fallback="${fallbackGradient}"` : '';
+                
+                const safeTitle = Utilidades.escaparHtml(item.title ?? 'Sem título');
+                const linkSeguro = Utilidades.sanitizarLink(item.link);
+                const safeLink = Utilidades.escaparHtml(linkSeguro);
+                const sourceDisplay = item.sourceFeed || (item.link ? Utilidades.extrairDominio(item.link) : '');
+                const timeAgo = Utilidades.formatarDataRelativa(item.pubDate ?? '');
+                
+                // Itens inativos do carrossel devem ter tabindex=-1 em elementos interativos
+                const linkTabIndex = index === 0 ? '0' : '-1';
+                
+                return `
+                    <div class="carousel-item ${index === 0 ? 'active' : ''}" role="tabpanel" aria-hidden="${index !== 0}">
+                        <article class="feed-item" style="${backgroundStyle}" ${dataFallback}>
+                            <div class="vidro-distorcao" aria-hidden="true"></div>
+                            <div class="vidro-painel" aria-hidden="true"></div>
+                            <div class="vidro-especular" aria-hidden="true"></div>
+                            <div class="vidro-destaque" aria-hidden="true"></div>
+                            <div class="vidro-reflexo" aria-hidden="true"></div>
+                            <div class="vidro-sombra" aria-hidden="true"></div>
+                            <div class="item-content">
+                                <h3 class="item-title">
+                                    <a href="${safeLink}" target="_blank" rel="noopener noreferrer" tabindex="${linkTabIndex}">${safeTitle}</a>
+                                </h3>
+                                <div class="item-meta">
+                                    <span class="item-source">${Utilidades.escaparHtml(sourceDisplay)}</span>
+                                    ${timeAgo ? `<span class="item-separator" aria-hidden="true">•</span><time datetime="${Utilidades.escaparHtml(item.pubDate ?? '')}"><img class="item-time-icon" src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Travel%20and%20places/Timer%20Clock.png" alt="" width="18" height="18" loading="lazy" aria-hidden="true"> ${Utilidades.escaparHtml(timeAgo)}</time>` : ''}
+                                </div>
+                            </div>
+                        </article>
+                    </div>
+                `;
+            },
+
+            /**
+             * Renderiza indicadores do carrossel
+             */
+            renderizarIndicadores(itemCount) {
+                const len = Math.max(0, Math.floor(Number(itemCount)));
+                if (len <= 1) return '';
+                
+                const indicators = Array.from({ length: len }, (_, i) => 
+                    `<button class="indicator ${i === 0 ? 'active' : ''}" 
+                            role="tab" 
+                            aria-selected="${i === 0}" 
+                            aria-label="Notícia ${i + 1} de ${len}"
+                            tabindex="${i === 0 ? '0' : '-1'}"></button>`
+                ).join('');
+                
+                return `<div class="carousel-indicators" role="tablist">${indicators}</div>`;
+            },
+
+            /**
+             * Renderiza um widget
+             */
+            renderizarWidget(widgetData, index) {
+                if (widgetData.error) {
+                    return `
+                        <div class="feed-widget error-widget" role="region" aria-label="Erro">
+                            <div class="carousel-container">
+                                <div class="carousel-item active">
+                                    <article class="feed-item">
+                                        <div class="vidro-distorcao" aria-hidden="true"></div>
+                                        <div class="vidro-painel" aria-hidden="true"></div>
+                                        <div class="vidro-especular" aria-hidden="true"></div>
+                                        <div class="vidro-destaque" aria-hidden="true"></div>
+                                        <div class="vidro-reflexo" aria-hidden="true"></div>
+                                        <div class="vidro-sombra" aria-hidden="true"></div>
+                                        <div class="item-content">
+                                            <div class="error-icon" aria-hidden="true">⚠️</div>
+                                            <h3 class="item-title">Erro ao carregar notícias</h3>
+                                            <div class="item-meta">
+                                                <span class="item-source">Tente novamente em alguns minutos</span>
+                                            </div>
+                                        </div>
+                                    </article>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                const items = widgetData.items ?? [];
+                const carouselItems = items.map((item, i) => this.renderizarCartaoNoticia(item, i)).join('');
+                const indicators = this.renderizarIndicadores(items.length);
+
+                return `
+                    <div class="feed-widget" role="region" aria-label="Widget de notícias ${index + 1}">
+                        <div class="carousel-container">
+                            ${carouselItems}
+                        </div>
+                        ${indicators}
+                    </div>
+                `;
+            },
+
+            /**
+             * Renderiza todos os widgets
+             */
+            renderizarTodosWidgets(widgets) {
+                const container = document.getElementById('feedsContainer');
+                if (!container) return;
+                container.innerHTML = widgets.map((w, i) => this.renderizarWidget(w, i)).join('');
+                
+                // Inicializa carrosséis
+                const widgetElements = container.querySelectorAll('.feed-widget');
+                widgets.forEach((widgetData, index) => {
+                    const el = widgetElements[index];
+                    if (el && !widgetData.error && widgetData.items?.length > 1) {
+                        ControladorCarrossel.iniciarCarrossel(el, widgetData.items.length);
+                    }
+                });
+                
+                // Trata imagens quebradas com gradientes de fallback
+                this.configurarTratadoresErroImagem(container);
+            },
+            
+            /**
+             * Configura handlers de erro para imagens de fundo
+             */
+            configurarTratadoresErroImagem(container) {
+                if (!container) return;
+                const feedItems = container.querySelectorAll('.feed-item[data-fallback]');
+                
+                feedItems.forEach(item => {
+                    // Cria imagem de teste para verificar se o fundo carrega
+                    const style = item.getAttribute('style') || '';
+                    const urlMatch = style.match(/url\(['"]?([^'")\s]+)['"]?\)/);
+                    
+                    if (urlMatch?.[1]) {
+                        const testImg = new Image();
+                        testImg.onerror = () => {
+                            // Aplica gradiente de fallback
+                            const fallback = item.getAttribute('data-fallback');
+                            if (fallback) {
+                                item.style.backgroundImage = 'none';
+                                item.style.background = fallback;
+                            }
+                        };
+                        testImg.src = urlMatch[1];
+                    }
+                });
+            },
+
+            /**
+             * Atualiza timestamp da última atualização
+             */
+            atualizarTimestamp() {
+                const now = new Date();
+                const timeElement = document.getElementById('lastUpdate');
+                
+                if (timeElement) {
+                    timeElement.textContent = now.toLocaleTimeString('pt-BR', {
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+                    // Define datetime ISO para acessibilidade e SEO
+                    timeElement.setAttribute('datetime', now.toISOString());
+                }
+            },
+
+            /**
+             * Mostra estado de carregamento
+             */
+            mostrarCarregamento() {
+                const container = document.getElementById('feedsContainer');
+                if (!container) return;
+                container.innerHTML = `
+                    <div class="loading" role="status" aria-live="polite">
+                        <div class="loading-content">
+                            <span class="loading-spinner" aria-hidden="true"></span>
+                            Carregando...
+                        </div>
+                    </div>
+                `;
+            }
+        };
+
+        /* Controlador de cursor (oculta ele após inatividade) */
+
+        const ControladorCursor = {
+            hideTimeout: null,
+            lastMoveTime: 0,
+            HIDE_DELAY: 3000,
+            THROTTLE_MS: 100,
+            
+            _handleMouseMove: null,
+            _handleMouseDown: null,
+            _handleTouchStart: null,
+
+            iniciar() {
+                // Habilita apenas em modo fullscreen
+                if (!window.matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches) {
+                    return;
+                }
+
+                // Cria handlers com referências para remoção posterior
+                this._handleMouseMove = () => {
+                    const now = Date.now();
+                    if (now - this.lastMoveTime >= this.THROTTLE_MS) {
+                        this.lastMoveTime = now;
+                        this.mostrarCursor();
+                    }
+                };
+                this._handleMouseDown = () => this.mostrarCursor();
+                this._handleTouchStart = () => this.ocultarCursor();
+
+                // Adiciona event listeners
+                document.addEventListener('mousemove', this._handleMouseMove);
+                document.addEventListener('mousedown', this._handleMouseDown);
+                document.addEventListener('touchstart', this._handleTouchStart, { passive: true });
+                
+                // Ocultação inicial
+                this.agendarOcultacao();
+            },
+
+            mostrarCursor() {
+                document.documentElement.classList.remove('cursor-hidden');
+                this.agendarOcultacao();
+            },
+
+            ocultarCursor() {
+                document.documentElement.classList.add('cursor-hidden');
+            },
+
+            agendarOcultacao() {
+                clearTimeout(this.hideTimeout);
+                this.hideTimeout = setTimeout(() => this.ocultarCursor(), this.HIDE_DELAY);
+            },
+            
+            /**
+             * Limpa recursos e remove event listeners
+             */
+            destruir() {
+                clearTimeout(this.hideTimeout);
+                this.hideTimeout = null;
+                
+                // Remove event listeners
+                if (this._handleMouseMove) {
+                    document.removeEventListener('mousemove', this._handleMouseMove);
+                    this._handleMouseMove = null;
+                }
+                if (this._handleMouseDown) {
+                    document.removeEventListener('mousedown', this._handleMouseDown);
+                    this._handleMouseDown = null;
+                }
+                if (this._handleTouchStart) {
+                    document.removeEventListener('touchstart', this._handleTouchStart);
+                    this._handleTouchStart = null;
+                }
+                
+                document.documentElement.classList.remove('cursor-hidden');
+            }
+        };
+
+        /* Aplicação */
+        const App = {
+            // Estado interno
+            refreshInterval: null,
+            
+            /**
+             * Inicializa a aplicação
+             */
+            async iniciar() {
+                // Inicializa widgets auxiliares (não-bloqueantes)
+                ControladorRelogio.iniciar();
+                ControladorClima.iniciar();
+                ControladorCotacoes.iniciar();
+
+                // Adiciona handler de mudança de visibilidade
+                document.addEventListener('visibilitychange', () => {
+                    if (document.visibilityState === 'visible') {
+                        this.verificarEAtualizar();
+                    }
+                });
+
+                // Adiciona limpeza no beforeunload
+                window.addEventListener('beforeunload', () => {
+                    this.limpar();
+                });
+
+                // Carregamento inicial
+                await this.carregarFeeds();
+                
+                // Agenda atualização periódica (armazena referência)
+                this.refreshInterval = setInterval(() => this.carregarFeeds(), CONFIG.INTERVALO_ATUALIZACAO);
+            },
+            
+            /**
+             * Limpa todos os recursos
+             */
+            limpar() {
+                if (this.refreshInterval) {
+                    clearInterval(this.refreshInterval);
+                    this.refreshInterval = null;
+                }
+                ControladorCarrossel.limparTodosTimers();
+                ControladorRelogio.destruir();
+                ControladorClima.destruir();
+                ControladorCotacoes.destruir();
+                ControladorCursor.destruir();
+            },
+
+            /**
+             * Verifica se atualização é necessária e dispara se for
+             */
+            verificarEAtualizar() {
+                if (EstadoApp.lastFetchTime) {
+                    const elapsed = Date.now() - EstadoApp.lastFetchTime;
+                    if (elapsed >= CONFIG.INTERVALO_ATUALIZACAO) {
+                        this.carregarFeeds();
+                    }
+                }
+            },
+
+            /**
+             * Carrega todos os feeds e renderiza
+             */
+            async carregarFeeds() {
+                if (EstadoApp.isLoading) return;
+                
+                EstadoApp.isLoading = true;
+                
+                try {
+                    // Limpa carrosséis existentes
+                    ControladorCarrossel.limparTodosTimers();
+                    
+                    // Mostra estado de carregamento (apenas no primeiro carregamento)
+                    if (!EstadoApp.lastFetchTime) {
+                        Renderizador.mostrarCarregamento();
+                    }
+                    
+                    // Busca todos os feeds
+                    const feedResults = await BuscadorFeed.buscarTodosFeeds();
+                    
+                    // Agrega e distribui notícias aleatoriamente
+                    const widgets = AgregadorNoticias.agregarEDistribuir(feedResults);
+                    
+                    // Renderiza widgets
+                    Renderizador.renderizarTodosWidgets(widgets);
+                    
+                    // Atualiza timestamp
+                    Renderizador.atualizarTimestamp();
+                    EstadoApp.lastFetchTime = Date.now();
+                    
+                } catch (error) {
+                    registrarErro('Erro fatal ao carregar feeds:', error);
+                    
+                    // Mostra estado de erro
+                    const container = document.getElementById('feedsContainer');
+                    if (container) {
+                        container.innerHTML = `
+                        <div class="loading error-widget">
+                            <div class="loading-content">
+                                Erro ao carregar notícias. Tentando novamente...
+                            </div>
+                        </div>
+                    `;
+                    }
+                    
+                    // Tenta novamente após atraso
+                    setTimeout(() => this.carregarFeeds(), CONFIG.ATRASO_TENTATIVA * 2);
+                    
+                } finally {
+                    EstadoApp.isLoading = false;
+                }
+            }
+        };
+
+        /* Service Worker */
+        const GerenciadorServiceWorker = {
+            /**
+             * Registra o service worker (apenas se sw.js existir no servidor, evita 404 no deploy)
+             */
+            async registrar() {
+                if (!('serviceWorker' in navigator)) {
+                    log('[App] Service Workers não suportados');
+                    return null;
+                }
+
+                try {
+                    // Verifica se sw.js existe antes de registrar (evita 404 quando não deployado junto)
+                    const check = await fetch('./sw.js', { method: 'HEAD' });
+                    if (!check.ok) {
+                        log('[App] sw.js não encontrado - registro de Service Worker omitido');
+                        return null;
+                    }
+
+                    const registration = await navigator.serviceWorker.register('./sw.js', {
+                        scope: './'
+                    });
+                    
+                    log('[App] Service Worker registrado:', registration.scope);
+                    
+                    // Escuta atualizações
+                    registration.addEventListener('updatefound', () => {
+                        const newWorker = registration.installing;
+                        log('[App] Nova versão do Service Worker encontrada');
+                        if (newWorker) {
+                            newWorker.addEventListener('statechange', () => {
+                                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                    log('[App] Nova versão disponível - atualize a página');
+                                }
+                            });
+                        }
+                    });
+                    
+                    // Escuta mensagens do SW
+                    navigator.serviceWorker.addEventListener('message', (event) => {
+                        const data = event.data;
+                        if (data && (data.type === 'SYNC_FEEDS' || data.type === 'REFRESH_FEEDS')) {
+                            log('[App] Recebido comando de sync do SW');
+                            App.carregarFeeds();
+                        }
+                    });
+                    
+                    // Registra para sync periódico em background se suportado
+                    if ('periodicSync' in registration) {
+                        try {
+                            await registration.periodicSync.register('refresh-feeds', {
+                                minInterval: 10 * 60 * 1000 // 10 minutos
+                            });
+                            log('[App] Periodic Background Sync registrado');
+                        } catch (error) {
+                            log('[App] Periodic Background Sync não disponível:', error.message);
+                        }
+                    }
+                    
+                    return registration;
+                    
+                } catch (error) {
+                    registrarErro('[App] Erro ao registrar Service Worker:', error);
+                    return null;
+                }
+            },
+
+            /**
+             * Solicita sync em background
+             */
+            async solicitarSincronizacao() {
+                // Verifica se Background Sync é suportado
+                if (!('serviceWorker' in navigator) || !('SyncManager' in window)) {
+                    return false;
+                }
+
+                try {
+                    const registration = await navigator.serviceWorker.ready;
+                    if (!registration.sync) {
+                        return false;
+                    }
+                    await registration.sync.register('sync-feeds');
+                    log('[App] Background sync solicitado');
+                    return true;
+                } catch (error) {
+                    log('[App] Background sync não disponível:', error.message);
+                    return false;
+                }
+            },
+
+            /**
+             * Verifica se o app está rodando em modo fullscreen
+             */
+            estaAutonomo() {
+                return window.matchMedia('(display-mode: standalone)').matches ||
+                       window.matchMedia('(display-mode: fullscreen)').matches ||
+                       window.navigator.standalone === true;
+            }
+        };
+
+        /* Inicialização */
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => {
+                App.iniciar().catch((err) => registrarErro('[App] Erro na inicialização:', err));
+                GerenciadorServiceWorker.registrar();
+                ControladorCursor.iniciar();
+            });
+        } else {
+            App.iniciar().catch((err) => registrarErro('[App] Erro na inicialização:', err));
+            GerenciadorServiceWorker.registrar();
+            ControladorCursor.iniciar();
+        }
+
+        // Trata eventos online/offline
+        window.addEventListener('online', () => {
+            log('[App] Conexão restaurada - atualizando feeds');
+            App.carregarFeeds();
+            GerenciadorServiceWorker.solicitarSincronizacao();
+        });
+
+        window.addEventListener('offline', () => {
+            log('[App] Offline - usando cache');
+        });
+    </script>
+</body>
+</html>
