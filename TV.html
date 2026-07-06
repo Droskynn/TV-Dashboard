@@ -24,7 +24,7 @@
     <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%230f2027' width='100' height='100' rx='20'/><text x='50' y='62' text-anchor='middle' font-size='50'>📰</text></svg>">
     
     <!-- Pré-conexão para performance -->
-    <link rel="preconnect" href="https://cors.eu.org">
+    <link rel="preconnect" href="https://api.rss2json.com">
     <link rel="preconnect" href="https://api.open-meteo.com">
     <link rel="preconnect" href="https://economia.awesomeapi.com.br">
     <link rel="dns-prefetch" href="https://nominatim.openstreetmap.org">
@@ -1686,10 +1686,16 @@
             INTERVALO_CARROSSEL: 6000,
             QTD_WIDGETS: 8,
             ITENS_POR_WIDGET: 8,
-            MAX_TENTATIVAS: 3,
-            ATRASO_TENTATIVA: 2000,
-            // ponytail: allorigins.win (backend down) e corsproxy.io (agora pago) morreram; cors.eu.org testado e funcionando
-            PROXIES: ['https://cors.eu.org/'],
+            // ponytail: nenhum feed envia CORS, então um intermediário é inevitável em HTML puro.
+            // rss2json (tipo json, infra própria) é o primário; os CORS-proxies genéricos (tipo xml,
+            // historicamente instáveis: corsproxy.io pago, cors.eu.org com 429) ficam de fallback.
+            // Todos aceitam prefixo + encodeURIComponent(url).
+            PROXIES: [
+                { url: 'https://api.rss2json.com/v1/api.json?rss_url=', tipo: 'json' },
+                { url: 'https://cors.eu.org/', tipo: 'xml' },
+                { url: 'https://api.codetabs.com/v1/proxy?quest=', tipo: 'xml' },
+                { url: 'https://api.allorigins.win/raw?url=', tipo: 'xml' }
+            ],
             INTERVALO_CLIMA: 30 * 60 * 1000,
             URL_API_CLIMA: 'https://api.open-meteo.com/v1/forecast',
             INTERVALO_COTACOES: 15 * 60 * 1000,
@@ -1715,7 +1721,8 @@
             { name: 'Canaltech', url: 'https://feeds2.feedburner.com/canaltechbr', maxItems: 10 },
             { name: 'O GLOBO', url: 'https://oglobo.globo.com/rss/oglobo', maxItems: 10 },
             { name: 'Metrópoles', url: 'https://www.metropoles.com/feed', maxItems: 10 },
-            { name: 'GOV.BR', url: 'https://www.gov.br/pt-br/noticias/mais-noticias/RSS', maxItems: 10 },
+            // GOV.BR removido: o RSS passou a exigir login; Agência Brasil (EBC) é a fonte oficial equivalente
+            { name: 'Agência Brasil', url: 'https://agenciabrasil.ebc.com.br/rss/ultimasnoticias/feed.xml', maxItems: 10 },
             { name: 'CNN Brasil', url: 'https://www.cnnbrasil.com.br/feed', maxItems: 10 },
         ]);
 
@@ -1724,8 +1731,7 @@
             carouselTimers: new Map(),
             isLoading: false,
             lastFetchTime: null,
-            feedCache: new Map(),
-            retryCount: new Map()
+            feedCache: new Map()
         };
 
         /* Utilitários */
@@ -1738,10 +1744,6 @@
                     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
                 }
                 return shuffled;
-            },
-
-            esperar(ms) {
-                return new Promise(resolve => setTimeout(resolve, ms));
             },
 
             async fetchComTimeout(url, options = {}, ms = 10000) {
@@ -1770,10 +1772,6 @@
                     if (u.protocol === 'http:' || u.protocol === 'https:') return trimmed;
                 } catch (e) {}
                 return null;
-            },
-
-            sanitizarLink(url) {
-                return this.urlHttpValida(url) ?? '#';
             },
 
             sanitizarUrlImagem(url) {
@@ -1945,6 +1943,11 @@
                 return this.weatherEmojiBaseUrl + encodeURIComponent(file);
             },
 
+            iconeClimaHtml(weatherCode) {
+                const src = this.urlIconeClima(weatherCode);
+                return '<img src="' + src + '" alt="" width="32" height="32" loading="lazy" aria-hidden="true">';
+            },
+
             /**
              * Atualiza a interface do widget de clima
              */
@@ -1967,8 +1970,7 @@
 
                 // Atualiza ícone
                 if (iconEl) {
-                    const src = this.urlIconeClima(weatherCode);
-                    iconEl.innerHTML = '<img src="' + src + '" alt="" width="32" height="32" loading="lazy" aria-hidden="true">';
+                    iconEl.innerHTML = this.iconeClimaHtml(weatherCode);
                 }
                 tempEl.textContent = `${temperature}°C`;
                 conditionEl.textContent = this.weatherCodes[weatherCode]?.desc || 'Desconhecido';
@@ -1994,8 +1996,7 @@
 
                 if (widget) widget.classList.remove('loading');
                 if (iconEl) {
-                    const src = this.weatherEmojiBaseUrl + 'Thermometer.png';
-                    iconEl.innerHTML = '<img src="' + src + '" alt="" width="32" height="32" loading="lazy" aria-hidden="true">';
+                    iconEl.innerHTML = this.iconeClimaHtml(null);
                 }
                 if (tempEl) tempEl.textContent = '--°C';
                 if (conditionEl) conditionEl.textContent = 'Indisponível';
@@ -2296,6 +2297,31 @@
             },
 
             /**
+             * Converte resposta JSON do rss2json para o formato interno
+             */
+            analisarRss2json(data, feedName) {
+                if (data?.status !== 'ok' || !Array.isArray(data.items)) {
+                    throw new Error(`Resposta rss2json inválida para ${feedName}`);
+                }
+
+                const items = data.items.map(item => ({
+                    title: Utilidades.removerHtml(item.title) || 'Sem título',
+                    link: item.link || '#',
+                    description: item.description || '',
+                    // rss2json devolve 'AAAA-MM-DD hh:mm:ss' em UTC, sem timezone
+                    pubDate: item.pubDate ? item.pubDate.replace(' ', 'T') + 'Z' : new Date().toISOString(),
+                    // enclosure primeiro: é a URL original do feed; item.thumbnail é uma
+                    // variante redimensionada gerada pelo rss2json que dá 404 em alguns CDNs (ex: IGN)
+                    thumbnail: (item.enclosure?.type?.startsWith('image/') ? item.enclosure.link : null)
+                        || item.thumbnail
+                        || this.extrairImagemDoHTML((item.content || '') + (item.description || '')),
+                    source: feedName
+                })).filter(item => item.title && item.title !== 'Sem título');
+
+                return { items };
+            },
+
+            /**
              * Analisa entrada Atom
              */
             analisarEntradaAtom(entry, feedName) {
@@ -2342,12 +2368,10 @@
         /* Busca de feeds */
         const BuscadorFeed = {
             /**
-             * Busca um único feed com lógica de tentativas
+             * Busca um único feed, rotacionando pelos proxies em caso de falha
              */
             async buscarFeed(feedConfig, proxyIndex = 0) {
                 if (!feedConfig?.url) throw new Error('Configuração de feed inválida');
-                const retryKey = feedConfig.url;
-                const currentRetry = EstadoApp.retryCount.get(retryKey) || 0;
 
                 try {
                     const proxy = CONFIG.PROXIES[proxyIndex];
@@ -2355,11 +2379,11 @@
                         throw new Error('Nenhum proxy disponível');
                     }
 
-                    const proxyUrl = `${proxy}${encodeURIComponent(feedConfig.url)}`;
+                    const proxyUrl = `${proxy.url}${encodeURIComponent(feedConfig.url)}`;
 
                     const response = await Utilidades.fetchComTimeout(proxyUrl, {
                         headers: {
-                            'Accept': 'application/rss+xml, application/xml, text/xml, */*'
+                            'Accept': 'application/rss+xml, application/xml, text/xml, application/json, */*'
                         }
                     }, 15000);
 
@@ -2367,11 +2391,9 @@
                         throw new Error(`HTTP ${response.status}`);
                     }
 
-                    const xmlText = await response.text();
-                    const data = AnalisadorRSS.analisarXML(xmlText, feedConfig.name);
-
-                    // Reseta contador de tentativas em caso de sucesso
-                    EstadoApp.retryCount.delete(retryKey);
+                    const data = proxy.tipo === 'json'
+                        ? AnalisadorRSS.analisarRss2json(await response.json(), feedConfig.name)
+                        : AnalisadorRSS.analisarXML(await response.text(), feedConfig.name);
 
                     // Armazena resultado em cache
                     EstadoApp.feedCache.set(feedConfig.url, {
@@ -2385,20 +2407,15 @@
                     };
 
                 } catch (err) {
-                    console.warn(`Erro ao carregar ${feedConfig.name} (tentativa ${currentRetry + 1}):`, err.message);
+                    console.warn(`Erro ao carregar ${feedConfig.name} (proxy ${proxyIndex + 1}/${CONFIG.PROXIES.length}):`, err.message);
 
                     // Tenta próximo proxy (0 = primário, 1+ = fallbacks)
+                    // ponytail: sem rodada externa de retry — 4 proxies já são a redundância,
+                    // e o Promise.all segura a tela inteira esperando o feed mais lento
                     if (proxyIndex < CONFIG.PROXIES.length - 1) {
                         return this.buscarFeed(feedConfig, proxyIndex + 1);
                     }
-                    
-                    // Tenta novamente com atraso
-                    if (currentRetry < CONFIG.MAX_TENTATIVAS) {
-                        EstadoApp.retryCount.set(retryKey, currentRetry + 1);
-                        await Utilidades.esperar(CONFIG.ATRASO_TENTATIVA * (currentRetry + 1));
-                        return this.buscarFeed(feedConfig, 0);
-                    }
-                    
+
                     // Verifica cache para fallback
                     const cached = EstadoApp.feedCache.get(feedConfig.url);
                     if (cached) {
@@ -2407,7 +2424,7 @@
                             items: cached.data.items.slice(0, feedConfig.maxItems || 10)
                         };
                     }
-                    
+
                     return {
                         ...feedConfig,
                         error: err.message
@@ -2658,7 +2675,7 @@
                     : `background: ${fallbackGradient};`;
 
                 const safeTitle = Utilidades.escaparHtml(item.title ?? 'Sem título');
-                const linkSeguro = Utilidades.sanitizarLink(item.link);
+                const linkSeguro = Utilidades.urlHttpValida(item.link) ?? '#';
                 const safeLink = Utilidades.escaparHtml(linkSeguro);
                 const sourceDisplay = item.sourceFeed || (item.link ? Utilidades.extrairDominio(item.link) : '');
                 const timeAgo = Utilidades.formatarDataRelativa(item.pubDate ?? '');
@@ -2923,7 +2940,7 @@
                     }
                     
                     // Tenta novamente após atraso
-                    setTimeout(() => this.carregarFeeds(), CONFIG.ATRASO_TENTATIVA * 2);
+                    setTimeout(() => this.carregarFeeds(), 4000);
                     
                 } finally {
                     EstadoApp.isLoading = false;

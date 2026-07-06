@@ -2,23 +2,13 @@
  * Service Worker para Dashboard RSS
  */
 
-const CACHE_VERSION = 'v1.0.1';
+const CACHE_VERSION = 'v1.0.4';
 const CACHE_NAME = `rss-dashboard-${CACHE_VERSION}`;
-const FEED_CACHE_NAME = `rss-feeds-${CACHE_VERSION}`;
-
-// TTL do cache de feeds (1 hora em milissegundos)
-const FEED_CACHE_TTL = 60 * 60 * 1000;
 
 // Assets para pré-cache (shell da aplicação)
 const PRECACHE_ASSETS = [
     './TV.html',
     './manifest.json'
-];
-
-// URLs dos proxies CORS usados para feeds
-const FEED_PROXY_PATTERNS = [
-    'api.allorigins.win',
-    'corsproxy.io'
 ];
 
 // Nome do cache de imagens
@@ -55,17 +45,16 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
     console.log('[SW] Ativando Service Worker...');
     
-    const validCaches = [CACHE_NAME, FEED_CACHE_NAME, IMAGE_CACHE_NAME];
-    
+    const validCaches = [CACHE_NAME, IMAGE_CACHE_NAME];
+
     event.waitUntil(
         caches.keys()
             .then((cacheNames) => {
                 return Promise.all(
                     cacheNames
-                        .filter((name) => 
-                            (name.startsWith('rss-dashboard-') || 
-                             name.startsWith('rss-feeds-') || 
-                             name.startsWith('rss-images-')) && 
+                        .filter((name) =>
+                            (name.startsWith('rss-dashboard-') ||
+                             name.startsWith('rss-images-')) &&
                             !validCaches.includes(name)
                         )
                         .map((name) => {
@@ -80,13 +69,6 @@ self.addEventListener('activate', (event) => {
             })
     );
 });
-
-/**
- * Verifica se a URL corresponde a um padrão
- */
-function correspondeAoPadrao(url, patterns) {
-    return patterns.some(pattern => url.includes(pattern));
-}
 
 /**
  * Estratégia: Rede Primeiro com fallback para cache
@@ -139,71 +121,6 @@ async function cachePrimeiro(request) {
         console.error('[SW] Falha ao buscar:', request.url);
         throw error;
     }
-}
-
-/**
- * Estratégia: Desatualizado Enquanto Revalida com TTL
- * Retorna cache imediatamente enquanto atualiza em background
- * Ideal para feeds RSS
- */
-async function desatualizadoEnquantoRevalida(request) {
-    const cache = await caches.open(FEED_CACHE_NAME);
-    const cachedResponse = await cache.match(request);
-    
-    // Verifica se resposta em cache ainda é válida (dentro do TTL)
-    let isCacheValid = false;
-    if (cachedResponse) {
-        const cachedDate = cachedResponse.headers.get('sw-cached-at');
-        if (cachedDate) {
-            const cacheAge = Date.now() - parseInt(cachedDate, 10);
-            isCacheValid = cacheAge < FEED_CACHE_TTL;
-        }
-    }
-    
-    // Busca em background para atualizar cache
-    const fetchPromise = fetch(request)
-        .then((networkResponse) => {
-            if (networkResponse.ok) {
-                // Clona resposta e adiciona header de timestamp
-                const headers = new Headers(networkResponse.headers);
-                headers.set('sw-cached-at', Date.now().toString());
-                
-                const timestampedResponse = new Response(networkResponse.clone().body, {
-                    status: networkResponse.status,
-                    statusText: networkResponse.statusText,
-                    headers: headers
-                });
-                
-                cache.put(request, timestampedResponse);
-            }
-            return networkResponse;
-        })
-        .catch((error) => {
-            console.log('[SW] Revalidação falhou:', error.message);
-            // Retorna resposta em cache se disponível, senão erro de rede
-            return cachedResponse || new Response('', { status: 503 });
-        });
-    
-    // Retorna cache se disponível e válido, senão espera rede
-    if (cachedResponse && isCacheValid) {
-        // Dispara busca em background mas não espera por ela
-        fetchPromise.catch(() => {}); // Trata erros silenciosamente
-        return cachedResponse;
-    }
-    
-    // Se cache está expirado ou não existe, espera pela rede
-    // mas ainda retorna cache expirado como fallback se rede falhar
-    if (cachedResponse && !isCacheValid) {
-        console.log('[SW] Cache expirado, buscando da rede...');
-        try {
-            return await fetchPromise;
-        } catch (error) {
-            console.log('[SW] Rede falhou, usando cache expirado:', error.message);
-            return cachedResponse;
-        }
-    }
-    
-    return fetchPromise;
 }
 
 /**
@@ -273,10 +190,7 @@ self.addEventListener('fetch', (event) => {
     }
     
     // Estratégia baseada no tipo de requisição
-    if (correspondeAoPadrao(url, FEED_PROXY_PATTERNS)) {
-        // Feeds RSS: Desatualizado Enquanto Revalida (resposta rápida + atualização)
-        event.respondWith(desatualizadoEnquantoRevalida(request));
-    } else if (request.destination === 'image') {
+    if (request.destination === 'image') {
         // Imagens (thumbnails): Cache Primeiro para performance offline
         event.respondWith(cacheImagemPrimeiro(request));
     } else if (url.includes('.html') || url.includes('.js') || url.includes('.css')) {
