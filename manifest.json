@@ -32,12 +32,7 @@
     "lang": "pt-BR",
     "dir": "ltr",
     "scope": "./",
-    "prefer_related_applications": false,
-    "display_override": ["fullscreen", "standalone", "minimal-ui"],
     "launch_handler": {
         "client_mode": "focus-existing"
-    },
-    "edge_side_panel": {
-        "preferred_width": 400
     }
 }

@@ -24,7 +24,7 @@
     <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%230f2027' width='100' height='100' rx='20'/><text x='50' y='62' text-anchor='middle' font-size='50'>📰</text></svg>">
     
     <!-- Pré-conexão para performance -->
-    <link rel="preconnect" href="https://api.allorigins.win">
+    <link rel="preconnect" href="https://cors.eu.org">
     <link rel="preconnect" href="https://api.open-meteo.com">
     <link rel="preconnect" href="https://economia.awesomeapi.com.br">
     <link rel="dns-prefetch" href="https://nominatim.openstreetmap.org">
@@ -191,10 +191,51 @@
         /* Otimizações específicas para TV */
         @media (min-width: 1920px) and (min-height: 1080px) {
             body {
-                /* Deslocamentos maiores para telas maiores */
-                --burnin-shift-amount: 4px;
                 --burnin-cycle-duration: 90s;
             }
+        }
+
+        /* ============================================
+           Efeito de vidro compartilhado (clima, cotações, hora)
+           ============================================ */
+        .glass-bar {
+            background: rgba(255, 255, 255, 0.06);
+            backdrop-filter: blur(20px) saturate(1.3);
+            -webkit-backdrop-filter: blur(20px) saturate(1.3);
+            border: 1.5px solid var(--vidro-borda);
+
+            /* Sombras multi-camadas do vidro */
+            box-shadow:
+                /* Brilho externo */
+                0 0 0 1px rgba(255, 255, 255, 0.08),
+                /* Sombra de profundidade */
+                0 4px 24px var(--vidro-sombra),
+                /* Destaque especular superior */
+                inset 0 1px 0 rgba(255, 255, 255, 0.5),
+                inset 1px 0 0 rgba(255, 255, 255, 0.2),
+                /* Sombra inferior */
+                inset 0 -1px 0 rgba(0, 0, 0, 0.15),
+                inset -1px 0 0 rgba(0, 0, 0, 0.08),
+                /* Brilho interno */
+                inset 0 0 20px rgba(255, 255, 255, 0.03);
+
+            transition:
+                transform var(--duration-medium) var(--ease-standard),
+                box-shadow var(--duration-medium) var(--ease-standard),
+                border-color var(--duration-medium) var(--ease-standard);
+        }
+
+        .glass-bar:hover {
+            border-color: var(--vidro-borda-hover);
+            box-shadow:
+                0 0 0 1px rgba(255, 255, 255, 0.12),
+                0 0 30px rgba(255, 255, 255, 0.08),
+                0 8px 32px var(--vidro-sombra),
+                inset 0 1px 0 rgba(255, 255, 255, 0.6),
+                inset 1px 0 0 rgba(255, 255, 255, 0.25),
+                inset 0 -1px 0 rgba(0, 0, 0, 0.2),
+                inset -1px 0 0 rgba(0, 0, 0, 0.1),
+                inset 0 0 30px rgba(255, 255, 255, 0.05);
         }
 
         /* ============================================
@@ -211,48 +252,12 @@
             padding: 12px 20px;
             border-radius: 20px;
             max-width: calc(100vw - var(--weather-widget-margin) * 2);
-            
-            /* Efeito de vidro aprimorado */
-            background: rgba(255, 255, 255, 0.06);
-            backdrop-filter: blur(20px) saturate(1.3);
-            -webkit-backdrop-filter: blur(20px) saturate(1.3);
-            border: 1.5px solid var(--vidro-borda);
-            
-            /* Sombras multi-camadas do vidro */
-            box-shadow: 
-                /* Brilho externo */
-                0 0 0 1px rgba(255, 255, 255, 0.08),
-                /* Sombra de profundidade */
-                0 4px 24px var(--vidro-sombra),
-                /* Destaque especular superior */
-                inset 0 1px 0 rgba(255, 255, 255, 0.5),
-                inset 1px 0 0 rgba(255, 255, 255, 0.2),
-                /* Sombra inferior */
-                inset 0 -1px 0 rgba(0, 0, 0, 0.15),
-                inset -1px 0 0 rgba(0, 0, 0, 0.08),
-                /* Brilho interno */
-                inset 0 0 20px rgba(255, 255, 255, 0.03);
-            
-            /* Animação */
-            animation: weatherWidgetEntrance var(--duration-slow) var(--ease-out-expo) 300ms backwards;
-            transition: 
-                transform var(--duration-medium) var(--ease-standard),
-                box-shadow var(--duration-medium) var(--ease-standard),
-                border-color var(--duration-medium) var(--ease-standard);
+            --entrada-y: -10px;
+            animation: entradaWidget var(--duration-slow) var(--ease-out-expo) 300ms backwards;
         }
 
         .weather-widget:hover {
             transform: translateY(-2px);
-            border-color: var(--vidro-borda-hover);
-            box-shadow: 
-                0 0 0 1px rgba(255, 255, 255, 0.12),
-                0 0 30px rgba(255, 255, 255, 0.08),
-                0 8px 32px var(--vidro-sombra),
-                inset 0 1px 0 rgba(255, 255, 255, 0.6),
-                inset 1px 0 0 rgba(255, 255, 255, 0.25),
-                inset 0 -1px 0 rgba(0, 0, 0, 0.2),
-                inset -1px 0 0 rgba(0, 0, 0, 0.1),
-                inset 0 0 30px rgba(255, 255, 255, 0.05);
         }
 
         .weather-icon {
@@ -328,14 +333,14 @@
             animation: weatherInfoUpdate var(--duration-medium) var(--ease-standard);
         }
 
-        @keyframes weatherWidgetEntrance {
+        @keyframes entradaWidget {
             0% {
                 opacity: 0;
-                transform: translateY(-10px) scale(0.95);
+                transform: translate(var(--entrada-x, 0px), var(--entrada-y, 0px)) scale(0.95);
             }
             100% {
                 opacity: 1;
-                transform: translateY(0) scale(1);
+                transform: translate(0, 0) scale(1);
             }
         }
 
@@ -372,43 +377,13 @@
             /* Evita sobreposição com o widget de hora no centro: no máximo 1/3 da tela à esquerda */
             max-width: calc(33.33% - var(--weather-widget-margin));
             overflow: hidden;
-            
-            /* Efeito de vidro */
-            background: rgba(255, 255, 255, 0.06);
-            backdrop-filter: blur(20px) saturate(1.3);
-            -webkit-backdrop-filter: blur(20px) saturate(1.3);
-            border: 1.5px solid var(--vidro-borda);
             border-radius: 20px;
-            
-            /* Sombras do vidro */
-            box-shadow: 
-                0 0 0 1px rgba(255, 255, 255, 0.08),
-                0 4px 24px var(--vidro-sombra),
-                inset 0 1px 0 rgba(255, 255, 255, 0.5),
-                inset 1px 0 0 rgba(255, 255, 255, 0.2),
-                inset 0 -1px 0 rgba(0, 0, 0, 0.15),
-                inset -1px 0 0 rgba(0, 0, 0, 0.08),
-                inset 0 0 20px rgba(255, 255, 255, 0.03);
-            
-            animation: currencyTickerEntrance var(--duration-slow) var(--ease-out-expo) 400ms backwards;
-            transition: 
-                transform var(--duration-medium) var(--ease-standard),
-                box-shadow var(--duration-medium) var(--ease-standard),
-                border-color var(--duration-medium) var(--ease-standard);
+            --entrada-x: -20px;
+            animation: entradaWidget var(--duration-slow) var(--ease-out-expo) 400ms backwards;
         }
-        
+
         .currency-ticker:hover {
             transform: translateY(-2px);
-            border-color: var(--vidro-borda-hover);
-            box-shadow: 
-                0 0 0 1px rgba(255, 255, 255, 0.12),
-                0 0 30px rgba(255, 255, 255, 0.08),
-                0 8px 32px var(--vidro-sombra),
-                inset 0 1px 0 rgba(255, 255, 255, 0.6),
-                inset 1px 0 0 rgba(255, 255, 255, 0.25),
-                inset 0 -1px 0 rgba(0, 0, 0, 0.2),
-                inset -1px 0 0 rgba(0, 0, 0, 0.1),
-                inset 0 0 30px rgba(255, 255, 255, 0.05);
         }
         
         /* Pausa a animação no hover */
@@ -445,7 +420,7 @@
         .currency-ticker-track {
             display: flex;
             gap: 24px;
-            animation: tickerScroll var(--ticker-duration, 20s) linear infinite;
+            animation: tickerScroll 28s linear infinite; /* 4s por moeda × 7 moedas (CONFIG.MOEDAS) — ajustar se a lista mudar */
             width: max-content;
         }
         
@@ -516,16 +491,6 @@
             }
         }
         
-        @keyframes currencyTickerEntrance {
-            0% {
-                opacity: 0;
-                transform: translateX(-20px) scale(0.95);
-            }
-            100% {
-                opacity: 1;
-                transform: translateX(0) scale(1);
-            }
-        }
 
         /* ============================================
            Widget de Hora (Relógio)
@@ -544,40 +509,12 @@
             padding: 12px 20px;
             border-radius: 20px;
             min-width: 120px;
-
-            background: rgba(255, 255, 255, 0.06);
-            backdrop-filter: blur(20px) saturate(1.3);
-            -webkit-backdrop-filter: blur(20px) saturate(1.3);
-            border: 1.5px solid var(--vidro-borda);
-
-            box-shadow:
-                0 0 0 1px rgba(255, 255, 255, 0.08),
-                0 4px 24px var(--vidro-sombra),
-                inset 0 1px 0 rgba(255, 255, 255, 0.5),
-                inset 1px 0 0 rgba(255, 255, 255, 0.2),
-                inset 0 -1px 0 rgba(0, 0, 0, 0.15),
-                inset -1px 0 0 rgba(0, 0, 0, 0.08),
-                inset 0 0 20px rgba(255, 255, 255, 0.03);
-
-            animation: weatherWidgetEntrance var(--duration-slow) var(--ease-out-expo) 200ms backwards;
-            transition:
-                transform var(--duration-medium) var(--ease-standard),
-                box-shadow var(--duration-medium) var(--ease-standard),
-                border-color var(--duration-medium) var(--ease-standard);
+            --entrada-y: -10px;
+            animation: entradaWidget var(--duration-slow) var(--ease-out-expo) 200ms backwards;
         }
 
         .clock-widget:hover {
             transform: translateX(-50%) translateY(-2px);
-            border-color: var(--vidro-borda-hover);
-            box-shadow:
-                0 0 0 1px rgba(255, 255, 255, 0.12),
-                0 0 30px rgba(255, 255, 255, 0.08),
-                0 8px 32px var(--vidro-sombra),
-                inset 0 1px 0 rgba(255, 255, 255, 0.6),
-                inset 1px 0 0 rgba(255, 255, 255, 0.25),
-                inset 0 -1px 0 rgba(0, 0, 0, 0.2),
-                inset -1px 0 0 rgba(0, 0, 0, 0.1),
-                inset 0 0 30px rgba(255, 255, 255, 0.05);
         }
 
         .clock-widget-time {
@@ -608,12 +545,6 @@
         }
         
         /* Responsividade do ticker */
-        @media (max-width: 1200px) {
-            .currency-ticker {
-                max-width: calc(33.33% - var(--weather-widget-margin));
-            }
-        }
-        
         @media (max-width: 900px) {
             .currency-ticker {
                 top: auto;
@@ -1690,14 +1621,14 @@
     </svg>
 
     <!-- Widget de Hora -->
-    <aside class="clock-widget" id="clockWidget" aria-label="Hora, data e última atualização" aria-live="polite">
+    <aside class="clock-widget glass-bar" id="clockWidget" aria-label="Hora, data e última atualização" aria-live="polite">
         <span class="clock-widget-time" id="clockTime" aria-label="Hora">--:--:--</span>
         <span class="clock-widget-date" id="clockDate" aria-label="Data">--</span>
         <span class="clock-widget-update">Atualizado às <time id="lastUpdate" datetime="">--:--</time></span>
     </aside>
 
     <!-- Widget de Clima -->
-    <aside class="weather-widget loading" id="weatherWidget" aria-label="Clima atual" aria-live="polite" aria-atomic="true">
+    <aside class="weather-widget glass-bar loading" id="weatherWidget" aria-label="Clima atual" aria-live="polite" aria-atomic="true">
         <span class="weather-icon" aria-hidden="true"><img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Travel%20and%20places/Thermometer.png" alt="" width="32" height="32" loading="lazy" aria-hidden="true"></span>
         <div class="weather-info">
             <span class="weather-temp" id="weatherTemp" aria-label="Temperatura">--°C</span>
@@ -1707,7 +1638,7 @@
     </aside>
 
     <!-- Widget de Cotações de Moedas -->
-    <aside class="currency-ticker loading" id="currencyTicker" aria-label="Cotações de moedas" aria-live="polite">
+    <aside class="currency-ticker glass-bar loading" id="currencyTicker" aria-label="Cotações de moedas" aria-live="polite">
         <div class="currency-ticker-inner">
             <span class="currency-ticker-label">💱 Câmbio</span>
             <div class="currency-ticker-container">
@@ -1757,19 +1688,22 @@
             ITENS_POR_WIDGET: 8,
             MAX_TENTATIVAS: 3,
             ATRASO_TENTATIVA: 2000,
-            URL_PROXY: 'https://api.allorigins.win/raw?url=',
-            PROXIES_RESERVA: ['https://corsproxy.io/?url='],
+            // ponytail: allorigins.win (backend down) e corsproxy.io (agora pago) morreram; cors.eu.org testado e funcionando
+            PROXIES: ['https://cors.eu.org/'],
             INTERVALO_CLIMA: 30 * 60 * 1000,
             URL_API_CLIMA: 'https://api.open-meteo.com/v1/forecast',
             INTERVALO_COTACOES: 15 * 60 * 1000,
             URL_API_COTACOES: 'https://economia.awesomeapi.com.br/json/last',
-            MOEDAS: ['USD', 'EUR', 'GBP', 'JPY', 'CNY', 'ARS', 'BTC'],
-            DEPURAR: false
+            MOEDAS: [
+                { code: 'USD', flag: '🇺🇸', name: 'Dólar' },
+                { code: 'EUR', flag: '🇪🇺', name: 'Euro' },
+                { code: 'GBP', flag: '🇬🇧', name: 'Libra' },
+                { code: 'JPY', flag: '🇯🇵', name: 'Iene' },
+                { code: 'CNY', flag: '🇨🇳', name: 'Yuan' },
+                { code: 'ARS', flag: '🇦🇷', name: 'Peso Arg.' },
+                { code: 'BTC', flag: '₿', name: 'Bitcoin' }
+            ]
         });
-
-        const log = (...args) => { if (CONFIG.DEPURAR) console.log(...args); };
-        const avisar = (...args) => { if (CONFIG.DEPURAR) console.warn(...args); };
-        const registrarErro = (...args) => { if (CONFIG.DEPURAR) console.error(...args); };
 
         /* Fontes RSS */
         const FEEDS_RSS = Object.freeze([
@@ -1796,15 +1730,6 @@
 
         /* Utilitários */
         const Utilidades = {
-            atrasar(fn, delay) {
-                let timeoutId;
-                return function debounced(...args) {
-                    const context = this;
-                    clearTimeout(timeoutId);
-                    timeoutId = setTimeout(() => fn.apply(context, args), delay);
-                };
-            },
-
             embaralharArray(array) {
                 if (!Array.isArray(array)) return [];
                 const shuffled = [...array];
@@ -1819,6 +1744,16 @@
                 return new Promise(resolve => setTimeout(resolve, ms));
             },
 
+            async fetchComTimeout(url, options = {}, ms = 10000) {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), ms);
+                try {
+                    return await fetch(url, { ...options, signal: controller.signal });
+                } finally {
+                    clearTimeout(timeoutId);
+                }
+            },
+
             extrairDominio(url) {
                 try {
                     return new URL(url).hostname.replace(/^www\./, '');
@@ -1827,23 +1762,24 @@
                 }
             },
 
-            sanitizarLink(url) {
-                if (!url || typeof url !== 'string') return '#';
+            urlHttpValida(url) {
+                if (!url || typeof url !== 'string') return null;
                 try {
-                    const u = new URL(url.trim());
-                    if (u.protocol === 'http:' || u.protocol === 'https:') return url.trim();
+                    const trimmed = url.trim();
+                    const u = new URL(trimmed);
+                    if (u.protocol === 'http:' || u.protocol === 'https:') return trimmed;
                 } catch (e) {}
-                return '#';
+                return null;
+            },
+
+            sanitizarLink(url) {
+                return this.urlHttpValida(url) ?? '#';
             },
 
             sanitizarUrlImagem(url) {
-                if (!url || typeof url !== 'string') return null;
-                try {
-                    const u = new URL(url.trim());
-                    if ((u.protocol !== 'http:' && u.protocol !== 'https:') || /['"\\]/.test(url)) return null;
-                    return url.trim();
-                } catch (e) {}
-                return null;
+                const valida = this.urlHttpValida(url);
+                if (!valida || /['"\\]/.test(valida)) return null;
+                return valida;
             },
 
             removerHtml(html) {
@@ -1901,66 +1837,35 @@
             
             weatherEmojiBaseUrl: 'https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Travel%20and%20places/',
 
-            weatherEmojiFiles: {
-                0: 'Sun.png',
-                1: 'Sun Behind Small Cloud.png',
-                2: 'Sun Behind Cloud.png',
-                3: 'Cloud.png',
-                45: 'Fog.png',
-                48: 'Foggy.png',
-                51: 'Sun Behind Rain Cloud.png',
-                53: 'Sun Behind Rain Cloud.png',
-                55: 'Sun Behind Rain Cloud.png',
-                56: 'Cloud with Snow.png',
-                57: 'Cloud with Snow.png',
-                61: 'Cloud with Rain.png',
-                63: 'Cloud with Rain.png',
-                65: 'Cloud with Rain.png',
-                66: 'Cloud with Snow.png',
-                67: 'Cloud with Snow.png',
-                71: 'Cloud with Snow.png',
-                73: 'Cloud with Snow.png',
-                75: 'Snowflake.png',
-                77: 'Cloud with Snow.png',
-                80: 'Sun Behind Rain Cloud.png',
-                81: 'Cloud with Rain.png',
-                82: 'Cloud with Lightning and Rain.png',
-                85: 'Cloud with Snow.png',
-                86: 'Snowflake.png',
-                95: 'Cloud with Lightning and Rain.png',
-                96: 'Cloud with Lightning.png',
-                99: 'Cloud with Lightning.png'
-            },
-
-            weatherDescriptions: {
-                0: 'Céu limpo',
-                1: 'Predominantemente limpo',
-                2: 'Parcialmente nublado',
-                3: 'Nublado',
-                45: 'Névoa',
-                48: 'Névoa com geada',
-                51: 'Garoa leve',
-                53: 'Garoa moderada',
-                55: 'Garoa intensa',
-                56: 'Garoa congelante leve',
-                57: 'Garoa congelante',
-                61: 'Chuva leve',
-                63: 'Chuva moderada',
-                65: 'Chuva forte',
-                66: 'Chuva congelante leve',
-                67: 'Chuva congelante',
-                71: 'Neve leve',
-                73: 'Neve moderada',
-                75: 'Neve intensa',
-                77: 'Grãos de neve',
-                80: 'Pancadas leves',
-                81: 'Pancadas moderadas',
-                82: 'Pancadas intensas',
-                85: 'Neve leve',
-                86: 'Neve intensa',
-                95: 'Tempestade',
-                96: 'Tempestade com granizo',
-                99: 'Tempestade severa'
+            weatherCodes: {
+                0: { icon: 'Sun.png', desc: 'Céu limpo' },
+                1: { icon: 'Sun Behind Small Cloud.png', desc: 'Predominantemente limpo' },
+                2: { icon: 'Sun Behind Cloud.png', desc: 'Parcialmente nublado' },
+                3: { icon: 'Cloud.png', desc: 'Nublado' },
+                45: { icon: 'Fog.png', desc: 'Névoa' },
+                48: { icon: 'Foggy.png', desc: 'Névoa com geada' },
+                51: { icon: 'Sun Behind Rain Cloud.png', desc: 'Garoa leve' },
+                53: { icon: 'Sun Behind Rain Cloud.png', desc: 'Garoa moderada' },
+                55: { icon: 'Sun Behind Rain Cloud.png', desc: 'Garoa intensa' },
+                56: { icon: 'Cloud with Snow.png', desc: 'Garoa congelante leve' },
+                57: { icon: 'Cloud with Snow.png', desc: 'Garoa congelante' },
+                61: { icon: 'Cloud with Rain.png', desc: 'Chuva leve' },
+                63: { icon: 'Cloud with Rain.png', desc: 'Chuva moderada' },
+                65: { icon: 'Cloud with Rain.png', desc: 'Chuva forte' },
+                66: { icon: 'Cloud with Snow.png', desc: 'Chuva congelante leve' },
+                67: { icon: 'Cloud with Snow.png', desc: 'Chuva congelante' },
+                71: { icon: 'Cloud with Snow.png', desc: 'Neve leve' },
+                73: { icon: 'Cloud with Snow.png', desc: 'Neve moderada' },
+                75: { icon: 'Snowflake.png', desc: 'Neve intensa' },
+                77: { icon: 'Cloud with Snow.png', desc: 'Grãos de neve' },
+                80: { icon: 'Sun Behind Rain Cloud.png', desc: 'Pancadas leves' },
+                81: { icon: 'Cloud with Rain.png', desc: 'Pancadas moderadas' },
+                82: { icon: 'Cloud with Lightning and Rain.png', desc: 'Pancadas intensas' },
+                85: { icon: 'Cloud with Snow.png', desc: 'Neve leve' },
+                86: { icon: 'Snowflake.png', desc: 'Neve intensa' },
+                95: { icon: 'Cloud with Lightning and Rain.png', desc: 'Tempestade' },
+                96: { icon: 'Cloud with Lightning.png', desc: 'Tempestade com granizo' },
+                99: { icon: 'Cloud with Lightning.png', desc: 'Tempestade severa' }
             },
 
             /**
@@ -2018,35 +1923,25 @@
              * @returns {Promise<string|null>} Nome da cidade ou null
              */
             async obterNomeCidade(lat, lon) {
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 5000); // Timeout de 5 segundos
-                
                 try {
                     const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&zoom=10`;
-                    const response = await fetch(url, {
-                        headers: { 'Accept-Language': 'pt-BR' },
-                        signal: controller.signal
-                    });
-                    
-                    clearTimeout(timeoutId);
-                    
+                    const response = await Utilidades.fetchComTimeout(url, { headers: { 'Accept-Language': 'pt-BR' } }, 5000);
+
                     if (!response.ok) return null;
-                    
+
                     const data = await response.json();
-                    return data.address?.city || 
-                           data.address?.town || 
+                    return data.address?.city ||
+                           data.address?.town ||
                            data.address?.municipality ||
                            data.address?.state ||
                            null;
                 } catch (error) {
-                    clearTimeout(timeoutId);
-                    avisar('Geocodificação falhou:', error.name === 'AbortError' ? 'Timeout' : error.message);
                     return null;
                 }
             },
 
             urlIconeClima(weatherCode) {
-                const file = this.weatherEmojiFiles[weatherCode] || 'Thermometer.png';
+                const file = this.weatherCodes[weatherCode]?.icon || 'Thermometer.png';
                 return this.weatherEmojiBaseUrl + encodeURIComponent(file);
             },
 
@@ -2076,7 +1971,7 @@
                     iconEl.innerHTML = '<img src="' + src + '" alt="" width="32" height="32" loading="lazy" aria-hidden="true">';
                 }
                 tempEl.textContent = `${temperature}°C`;
-                conditionEl.textContent = this.weatherDescriptions[weatherCode] || 'Desconhecido';
+                conditionEl.textContent = this.weatherCodes[weatherCode]?.desc || 'Desconhecido';
                 
                 if (locationEl && cityName) {
                     locationEl.textContent = cityName;
@@ -2110,12 +2005,6 @@
              * Inicializa widget de clima
              */
             async iniciar() {
-                // Limpa intervalo existente para prevenir duplicatas
-                if (this.refreshInterval) {
-                    clearInterval(this.refreshInterval);
-                    this.refreshInterval = null;
-                }
-                
                 try {
                     // Obtém localização do usuário
                     const location = await this.obterLocalizacao();
@@ -2137,21 +2026,10 @@
                     this.refreshInterval = setInterval(() => this.atualizar(), CONFIG.INTERVALO_CLIMA);
                     
                 } catch (error) {
-                    avisar('Erro ao carregar clima:', error.message);
                     this.mostrarErro();
                 }
             },
             
-            /**
-             * Limpa recursos
-             */
-            destruir() {
-                if (this.refreshInterval) {
-                    clearInterval(this.refreshInterval);
-                    this.refreshInterval = null;
-                }
-            },
-
             /**
              * Atualiza dados do clima
              */
@@ -2164,9 +2042,7 @@
                         this.currentLocation.lon
                     );
                     this.atualizarInterface(weatherData, this.currentCity);
-                } catch (error) {
-                    avisar('Erro ao atualizar clima:', error.message);
-                }
+                } catch (error) {}
             }
         };
 
@@ -2175,63 +2051,26 @@
             refreshInterval: null,
             retryTimeoutId: null,
             ultimasCotacoes: null,
-            
-            // Mapeamento de bandeiras por código de moeda
-            bandeiras: {
-                USD: '🇺🇸',
-                EUR: '🇪🇺',
-                GBP: '🇬🇧',
-                JPY: '🇯🇵',
-                CNY: '🇨🇳',
-                ARS: '🇦🇷',
-                BTC: '₿',
-                CAD: '🇨🇦',
-                AUD: '🇦🇺',
-                CHF: '🇨🇭'
-            },
-            
-            // Nomes das moedas
-            nomesMoedas: {
-                USD: 'Dólar',
-                EUR: 'Euro',
-                GBP: 'Libra',
-                JPY: 'Iene',
-                CNY: 'Yuan',
-                ARS: 'Peso Arg.',
-                BTC: 'Bitcoin',
-                CAD: 'Dólar Can.',
-                AUD: 'Dólar Aus.',
-                CHF: 'Franco Suíço'
-            },
-            
+
             /**
              * Busca cotações da API
              */
             async buscarCotacoes() {
-                const moedas = CONFIG.MOEDAS.join('-BRL,') + '-BRL';
+                const moedas = CONFIG.MOEDAS.map(m => m.code).join('-BRL,') + '-BRL';
                 const url = `${CONFIG.URL_API_COTACOES}/${moedas}`;
-                
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 10000);
-                
-                try {
-                    const response = await fetch(url, { signal: controller.signal });
-                    clearTimeout(timeoutId);
-                    
-                    if (!response.ok) {
-                        throw new Error(`Erro na API: ${response.status}`);
-                    }
-                    
-                    const contentType = response.headers.get('content-type');
-                    if (!contentType?.includes('application/json')) {
-                        throw new Error('API retornou resposta não-JSON');
-                    }
-                    
-                    return await response.json();
-                } catch (error) {
-                    clearTimeout(timeoutId);
-                    throw error;
+
+                const response = await Utilidades.fetchComTimeout(url, {}, 10000);
+
+                if (!response.ok) {
+                    throw new Error(`Erro na API: ${response.status}`);
                 }
+
+                const contentType = response.headers.get('content-type');
+                if (!contentType?.includes('application/json')) {
+                    throw new Error('API retornou resposta não-JSON');
+                }
+
+                return await response.json();
             },
             
             /**
@@ -2240,32 +2079,14 @@
             formatarValor(valor, codigo) {
                 const num = parseFloat(valor);
                 if (Number.isNaN(num)) return '--';
-                
-                // Bitcoin tem muitas casas decimais
-                if (codigo === 'BTC') {
-                    return num.toLocaleString('pt-BR', { 
-                        style: 'currency', 
-                        currency: 'BRL',
-                        minimumFractionDigits: 0,
-                        maximumFractionDigits: 0
-                    });
-                }
-                
-                // Iene tem valor baixo, mostrar mais casas
-                if (codigo === 'JPY') {
-                    return num.toLocaleString('pt-BR', { 
-                        style: 'currency', 
-                        currency: 'BRL',
-                        minimumFractionDigits: 4,
-                        maximumFractionDigits: 4
-                    });
-                }
-                
-                return num.toLocaleString('pt-BR', { 
-                    style: 'currency', 
+
+                // BTC sem casas decimais; JPY com 4 (valor baixo); demais com 2
+                const digits = { BTC: 0, JPY: 4 }[codigo] ?? 2;
+                return num.toLocaleString('pt-BR', {
+                    style: 'currency',
                     currency: 'BRL',
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2
+                    minimumFractionDigits: digits,
+                    maximumFractionDigits: digits
                 });
             },
             
@@ -2298,24 +2119,22 @@
                 
                 if (!dados || typeof dados !== 'object' || Array.isArray(dados)) return;
                 
-                const itens = CONFIG.MOEDAS.map(codigo => {
-                    const chave = `${codigo}BRL`;
-                    const cotacao = dados[chave];
-                    
+                const itens = CONFIG.MOEDAS.map(({ code, flag, name }) => {
+                    const cotacao = dados[`${code}BRL`];
+
                     if (!cotacao || typeof cotacao !== 'object') return '';
-                    
-                    const bandeira = this.bandeiras[codigo] || '💱';
-                    const valor = this.formatarValor(cotacao.bid, codigo);
+
+                    const valor = this.formatarValor(cotacao.bid, code);
                     const variacao = this.formatarVariacao(cotacao.pctChange);
                     const classeVariacao = this.obterClasseVariacao(cotacao.pctChange);
-                    const tituloSeguro = Utilidades.escaparHtml(`${this.nomesMoedas[codigo] || codigo}: ${valor}`);
+                    const tituloSeguro = Utilidades.escaparHtml(`${name}: ${valor}`);
                     const valorSeguro = Utilidades.escaparHtml(String(valor));
                     const variacaoSegura = Utilidades.escaparHtml(String(variacao));
-                    
+
                     return `
                         <div class="currency-item" title="${tituloSeguro}">
-                            <span class="currency-flag" aria-hidden="true">${bandeira}</span>
-                            <span class="currency-code">${codigo}</span>
+                            <span class="currency-flag" aria-hidden="true">${flag}</span>
+                            <span class="currency-code">${code}</span>
                             <span class="currency-value">${valorSeguro}</span>
                             <span class="currency-change ${classeVariacao}" aria-label="Variação: ${variacaoSegura}">${variacaoSegura}</span>
                         </div>
@@ -2324,11 +2143,6 @@
                 
                 // Duplica os itens para criar efeito de loop infinito
                 track.innerHTML = itens + itens;
-                
-                // Ajusta a duração da animação baseado no número de itens
-                const numItens = CONFIG.MOEDAS.length;
-                const duracao = numItens * 4; // 4 segundos por item
-                track.style.setProperty('--ticker-duration', `${duracao}s`);
             },
             
             /**
@@ -2381,29 +2195,12 @@
                     
                     // Configura atualização periódica
                     this.refreshInterval = setInterval(() => this.atualizar(), CONFIG.INTERVALO_COTACOES);
-                    
-                    log('[App] Widget de cotações inicializado');
                 } catch (error) {
-                    avisar('Erro ao carregar cotações:', error.message);
                     this.mostrarErro();
                     
                     // Tenta novamente após 30 segundos
                     if (this.retryTimeoutId != null) clearTimeout(this.retryTimeoutId);
                     this.retryTimeoutId = setTimeout(() => this.iniciar(), 30000);
-                }
-            },
-            
-            /**
-             * Limpa recursos
-             */
-            destruir() {
-                if (this.retryTimeoutId != null) {
-                    clearTimeout(this.retryTimeoutId);
-                    this.retryTimeoutId = null;
-                }
-                if (this.refreshInterval) {
-                    clearInterval(this.refreshInterval);
-                    this.refreshInterval = null;
                 }
             },
             
@@ -2414,57 +2211,27 @@
                 try {
                     const dados = await this.buscarCotacoes();
                     this.atualizarInterface(dados);
-                } catch (error) {
-                    avisar('Erro ao atualizar cotações:', error.message);
-                }
+                } catch (error) {}
             }
         };
 
         /* Relógio */
         const ControladorRelogio = {
             tickInterval: null,
-            diasSemana: ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'],
-            meses: ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'],
-
-            formatarHora(now) {
-                const h = now.getHours();
-                const m = now.getMinutes();
-                const s = now.getSeconds();
-                return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-            },
-
-            formatarDia(now) {
-                if (!(now instanceof Date) || isNaN(now.getTime())) return '—';
-                const dia = this.diasSemana[now.getDay()];
-                const d = now.getDate();
-                const mes = this.meses[now.getMonth()];
-                return `${dia}, ${d} de ${mes}`;
-            },
 
             atualizar() {
                 const timeEl = document.getElementById('clockTime');
                 const dateEl = document.getElementById('clockDate');
                 if (!timeEl || !dateEl) return;
                 const now = new Date();
-                timeEl.textContent = this.formatarHora(now);
-                dateEl.textContent = this.formatarDia(now);
+                timeEl.textContent = now.toLocaleTimeString('pt-BR');
+                dateEl.textContent = now.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
                 timeEl.setAttribute('datetime', now.toISOString());
             },
 
             iniciar() {
-                if (this.tickInterval) {
-                    clearInterval(this.tickInterval);
-                    this.tickInterval = null;
-                }
                 this.atualizar();
                 this.tickInterval = setInterval(() => this.atualizar(), 1000);
-            },
-
-            destruir() {
-                if (this.tickInterval) {
-                    clearInterval(this.tickInterval);
-                    this.tickInterval = null;
-                }
             }
         };
 
@@ -2475,23 +2242,21 @@
              */
             extrairImagemDoHTML(html) {
                 if (!html) return null;
-                
-                // Tenta encontrar tag img com src
-                const imgMatch = html.match(/<img[^>]+src=["']([^"']+)["']/i);
-                if (imgMatch?.[1]) {
-                    const url = imgMatch[1];
-                    // Filtra pixels de rastreamento e imagens pequenas
-                    if (!url.includes('1x1') && 
-                        !url.includes('tracking') && 
-                        !url.includes('pixel') &&
-                        !url.includes('spacer')) {
-                        return url;
-                    }
-                }
-                
+                const doc = new DOMParser().parseFromString(html, 'text/html');
+
+                // Tenta encontrar tag img com src, filtrando pixels de rastreamento
+                const img = [...doc.images].find(el => {
+                    const src = el.getAttribute('src');
+                    return src && !/1x1|tracking|pixel|spacer/i.test(src);
+                });
+                if (img) return img.getAttribute('src');
+
                 // Tenta encontrar og:image ou outros padrões de imagem
-                const srcMatch = html.match(/(?:src|href)=["']([^"']+\.(?:jpg|jpeg|png|webp|gif))/i);
-                return srcMatch?.[1] || null;
+                for (const el of doc.querySelectorAll('[src], [href]')) {
+                    const url = el.getAttribute('src') || el.getAttribute('href');
+                    if (/\.(jpe?g|png|webp|gif)(\?.*)?$/i.test(url)) return url;
+                }
+                return null;
             },
 
             /**
@@ -2516,9 +2281,6 @@
                     throw new Error(`Estrutura de feed inválida para ${feedName}`);
                 }
 
-                // Obtém título do feed
-                const feedTitle = channel.querySelector('title')?.textContent || feedName;
-
                 // Obtém itens/entradas
                 const itemElements = isAtom 
                     ? Array.from(xmlDoc.querySelectorAll('entry'))
@@ -2530,7 +2292,7 @@
                         : this.analisarItemRSS(item, feedName);
                 }).filter(item => item.title && item.title !== 'Sem título');
 
-                return { feed: { title: feedTitle }, items };
+                return { items };
             },
 
             /**
@@ -2558,33 +2320,13 @@
              * Analisa item RSS
              */
             analisarItemRSS(item, feedName) {
-                let thumbnail = null;
-                
                 // Tenta várias fontes de thumbnail
-                const mediaThumbnail = item.querySelector('thumbnail');
-                if (mediaThumbnail) {
-                    thumbnail = mediaThumbnail.getAttribute('url');
-                }
-                
-                if (!thumbnail) {
-                    const mediaContent = item.querySelector('content[url]');
-                    if (mediaContent) {
-                        thumbnail = mediaContent.getAttribute('url');
-                    }
-                }
-                
-                if (!thumbnail) {
-                    const enclosure = item.querySelector('enclosure');
-                    if (enclosure?.getAttribute('type')?.startsWith('image/')) {
-                        thumbnail = enclosure.getAttribute('url');
-                    }
-                }
-                
-                if (!thumbnail) {
-                    const description = item.querySelector('description')?.textContent || '';
-                    const encoded = item.querySelector('encoded')?.textContent || '';
-                    thumbnail = this.extrairImagemDoHTML(description + encoded);
-                }
+                const enclosure = item.querySelector('enclosure');
+                const thumbnail = item.querySelector('thumbnail')?.getAttribute('url')
+                    || item.querySelector('content[url]')?.getAttribute('url')
+                    || (enclosure?.getAttribute('type')?.startsWith('image/') ? enclosure.getAttribute('url') : null)
+                    || this.extrairImagemDoHTML((item.querySelector('description')?.textContent || '') +
+                        (item.querySelector('encoded')?.textContent || ''));
                 
                 return {
                     title: Utilidades.removerHtml(item.querySelector('title')?.textContent) || 'Sem título',
@@ -2606,62 +2348,47 @@
                 if (!feedConfig?.url) throw new Error('Configuração de feed inválida');
                 const retryKey = feedConfig.url;
                 const currentRetry = EstadoApp.retryCount.get(retryKey) || 0;
-                let timeoutId;
-                
+
                 try {
-                    // Usa proxy primário primeiro (índice 0), depois fallbacks
-                    const proxy = proxyIndex === 0 
-                        ? CONFIG.URL_PROXY 
-                        : CONFIG.PROXIES_RESERVA[proxyIndex - 1];
-                    
-                    // Se não há mais proxies disponíveis, usa o primário
+                    const proxy = CONFIG.PROXIES[proxyIndex];
                     if (!proxy) {
                         throw new Error('Nenhum proxy disponível');
                     }
-                    
+
                     const proxyUrl = `${proxy}${encodeURIComponent(feedConfig.url)}`;
-                    
-                    const controller = new AbortController();
-                    timeoutId = setTimeout(() => controller.abort(), 15000);
-                    
-                    const response = await fetch(proxyUrl, {
-                        signal: controller.signal,
+
+                    const response = await Utilidades.fetchComTimeout(proxyUrl, {
                         headers: {
                             'Accept': 'application/rss+xml, application/xml, text/xml, */*'
                         }
-                    });
-                    
-                    clearTimeout(timeoutId);
-                    
+                    }, 15000);
+
                     if (!response.ok) {
                         throw new Error(`HTTP ${response.status}`);
                     }
-                    
+
                     const xmlText = await response.text();
                     const data = AnalisadorRSS.analisarXML(xmlText, feedConfig.name);
-                    
+
                     // Reseta contador de tentativas em caso de sucesso
                     EstadoApp.retryCount.delete(retryKey);
-                    
+
                     // Armazena resultado em cache
                     EstadoApp.feedCache.set(feedConfig.url, {
                         data,
                         timestamp: Date.now()
                     });
-                    
+
                     return {
                         ...feedConfig,
-                        feed: data.feed,
                         items: data.items.slice(0, feedConfig.maxItems || 10)
                     };
-                    
+
                 } catch (err) {
-                    if (timeoutId != null) clearTimeout(timeoutId);
-                    avisar(`Erro ao carregar ${feedConfig.name} (tentativa ${currentRetry + 1}):`, err.message);
-                    
+                    console.warn(`Erro ao carregar ${feedConfig.name} (tentativa ${currentRetry + 1}):`, err.message);
+
                     // Tenta próximo proxy (0 = primário, 1+ = fallbacks)
-                    const totalProxies = 1 + CONFIG.PROXIES_RESERVA.length;
-                    if (proxyIndex < totalProxies - 1) {
+                    if (proxyIndex < CONFIG.PROXIES.length - 1) {
                         return this.buscarFeed(feedConfig, proxyIndex + 1);
                     }
                     
@@ -2675,12 +2402,9 @@
                     // Verifica cache para fallback
                     const cached = EstadoApp.feedCache.get(feedConfig.url);
                     if (cached) {
-                        log(`Usando cache para ${feedConfig.name}`);
                         return {
                             ...feedConfig,
-                            feed: cached.data.feed,
-                            items: cached.data.items.slice(0, feedConfig.maxItems || 10),
-                            fromCache: true
+                            items: cached.data.items.slice(0, feedConfig.maxItems || 10)
                         };
                     }
                     
@@ -2716,8 +2440,7 @@
                     feed.items.forEach(item => {
                         allNews.push({
                             ...item,
-                            sourceFeed: feed.name,
-                            sourceUrl: feed.url
+                            sourceFeed: feed.name
                         });
                     });
                 });
@@ -2748,8 +2471,7 @@
                     
                     widgets.push({
                         name: `Widget ${i + 1}`,
-                        items: widgetItems,
-                        isMixed: true
+                        items: widgetItems
                     });
                 }
                 
@@ -2780,7 +2502,6 @@
                 const carouselItems = widgetElement.querySelectorAll('.carousel-item');
                 const indicators = widgetElement.querySelectorAll('.indicator');
                 let currentIndex = 0;
-                let isPaused = false;
 
                 const atualizarCarrossel = (newIndex) => {
                     // Atualiza item antigo
@@ -2810,18 +2531,10 @@
                     indicators[currentIndex]?.classList.add('active');
                     indicators[currentIndex]?.setAttribute('aria-selected', 'true');
                     indicators[currentIndex]?.setAttribute('tabindex', '0');
-                    
-                    // Reinicia a animação de progresso forçando um reflow
-                    const activeIndicator = indicators[currentIndex];
-                    if (activeIndicator) {
-                        activeIndicator.style.animation = 'none';
-                        activeIndicator.offsetHeight; // Força reflow
-                        activeIndicator.style.animation = '';
-                    }
                 };
 
                 const proximoSlide = () => {
-                    if (!isPaused) {
+                    if (!widgetElement.matches(':hover')) {
                         atualizarCarrossel((currentIndex + 1) % itemCount);
                     }
                 };
@@ -2836,10 +2549,7 @@
                     if (estado) {
                         clearInterval(estado.timer);
                         const newTimer = setInterval(proximoSlide, CONFIG.INTERVALO_CARROSSEL);
-                        EstadoApp.carouselTimers.set(widgetElement, { 
-                            ...estado, 
-                            timer: newTimer 
-                        });
+                        EstadoApp.carouselTimers.set(widgetElement, { timer: newTimer });
                     }
                 };
 
@@ -2877,18 +2587,9 @@
                     }
                 };
 
-                // Handler de hover
-                const handleMouseEnter = () => { isPaused = true; };
-                const handleMouseLeave = () => { isPaused = false; };
-
-                // Armazena handlers para remoção posterior
-                const indicatorHandlers = [];
-
                 // Adiciona handlers de clique nos indicadores
                 indicators.forEach((indicator, index) => {
-                    const handler = handleIndicatorClick(index);
-                    indicatorHandlers.push({ element: indicator, handler });
-                    indicator.addEventListener('click', handler);
+                    indicator.addEventListener('click', handleIndicatorClick(index));
                 });
 
                 // Adiciona navegação por teclado no container de indicadores
@@ -2897,55 +2598,19 @@
                     indicatorsContainer.addEventListener('keydown', handleKeyDown);
                 }
 
-                // Pausa no hover
-                widgetElement.addEventListener('mouseenter', handleMouseEnter);
-                widgetElement.addEventListener('mouseleave', handleMouseLeave);
-
                 // Inicia rotação automática
                 const timer = setInterval(proximoSlide, CONFIG.INTERVALO_CARROSSEL);
-                
-                // Armazena estado e handlers para limpeza
-                EstadoApp.carouselTimers.set(widgetElement, { 
-                    timer, 
-                    isPaused: false,
-                    handlers: {
-                        indicatorHandlers,
-                        keydownHandler: handleKeyDown,
-                        mouseEnterHandler: handleMouseEnter,
-                        mouseLeaveHandler: handleMouseLeave,
-                        indicatorsContainer
-                    }
-                });
+
+                // Armazena timer para limpeza
+                EstadoApp.carouselTimers.set(widgetElement, { timer });
             },
 
             /**
-             * Limpa todos os timers e event listeners do carrossel
+             * Limpa todos os timers do carrossel
              */
             limparTodosTimers() {
-                EstadoApp.carouselTimers.forEach((estado, widgetElement) => {
-                    // Limpa timer
+                EstadoApp.carouselTimers.forEach((estado) => {
                     clearInterval(estado.timer);
-                    
-                    // Remove event listeners se existirem
-                    if (estado.handlers) {
-                        // Remove handlers dos indicadores
-                        estado.handlers.indicatorHandlers?.forEach(({ element, handler }) => {
-                            element.removeEventListener('click', handler);
-                        });
-                        
-                        // Remove handler de teclado
-                        if (estado.handlers.indicatorsContainer && estado.handlers.keydownHandler) {
-                            estado.handlers.indicatorsContainer.removeEventListener('keydown', estado.handlers.keydownHandler);
-                        }
-                        
-                        // Remove handlers de hover
-                        if (estado.handlers.mouseEnterHandler) {
-                            widgetElement.removeEventListener('mouseenter', estado.handlers.mouseEnterHandler);
-                        }
-                        if (estado.handlers.mouseLeaveHandler) {
-                            widgetElement.removeEventListener('mouseleave', estado.handlers.mouseLeaveHandler);
-                        }
-                    }
                 });
                 EstadoApp.carouselTimers.clear();
             }
@@ -2968,6 +2633,12 @@
             ],
 
             /**
+             * Camadas decorativas de vidro compartilhadas pelos cartões
+             */
+            camadasVidro: ['distorcao', 'painel', 'especular', 'destaque', 'reflexo', 'sombra']
+                .map(c => `<div class="vidro-${c}" aria-hidden="true"></div>`).join(''),
+
+            /**
              * Obtém gradiente de fallback consistente baseado no título do item
              */
             obterGradienteFallback(title) {
@@ -2980,22 +2651,12 @@
              * Renderiza um único cartão de notícia
              */
             renderizarCartaoNoticia(item, index) {
-                if (!item || typeof item !== 'object') {
-                    return `<div class="carousel-item ${index === 0 ? 'active' : ''}" role="tabpanel" aria-hidden="${index !== 0}">
-                        <article class="feed-item" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
-                            <div class="item-content"><h3 class="item-title"><a href="#" tabindex="-1">Sem título</a></h3><div class="item-meta"><span class="item-source">—</span></div></div>
-                        </article>
-                    </div>`;
-                }
                 const fallbackGradient = this.obterGradienteFallback(item.title);
                 const thumbnailSegura = Utilidades.sanitizarUrlImagem(item.thumbnail);
                 const backgroundStyle = thumbnailSegura
-                    ? `background-image: url('${Utilidades.escaparHtml(thumbnailSegura)}');`
+                    ? `background-image: url('${Utilidades.escaparHtml(thumbnailSegura)}'), ${fallbackGradient};`
                     : `background: ${fallbackGradient};`;
-                
-                // Atributo data para fallback em erro de imagem
-                const dataFallback = thumbnailSegura ? `data-fallback="${fallbackGradient}"` : '';
-                
+
                 const safeTitle = Utilidades.escaparHtml(item.title ?? 'Sem título');
                 const linkSeguro = Utilidades.sanitizarLink(item.link);
                 const safeLink = Utilidades.escaparHtml(linkSeguro);
@@ -3007,13 +2668,8 @@
                 
                 return `
                     <div class="carousel-item ${index === 0 ? 'active' : ''}" role="tabpanel" aria-hidden="${index !== 0}">
-                        <article class="feed-item" style="${backgroundStyle}" ${dataFallback}>
-                            <div class="vidro-distorcao" aria-hidden="true"></div>
-                            <div class="vidro-painel" aria-hidden="true"></div>
-                            <div class="vidro-especular" aria-hidden="true"></div>
-                            <div class="vidro-destaque" aria-hidden="true"></div>
-                            <div class="vidro-reflexo" aria-hidden="true"></div>
-                            <div class="vidro-sombra" aria-hidden="true"></div>
+                        <article class="feed-item" style="${backgroundStyle}">
+                            ${this.camadasVidro}
                             <div class="item-content">
                                 <h3 class="item-title">
                                     <a href="${safeLink}" target="_blank" rel="noopener noreferrer" tabindex="${linkTabIndex}">${safeTitle}</a>
@@ -3056,12 +2712,7 @@
                             <div class="carousel-container">
                                 <div class="carousel-item active">
                                     <article class="feed-item">
-                                        <div class="vidro-distorcao" aria-hidden="true"></div>
-                                        <div class="vidro-painel" aria-hidden="true"></div>
-                                        <div class="vidro-especular" aria-hidden="true"></div>
-                                        <div class="vidro-destaque" aria-hidden="true"></div>
-                                        <div class="vidro-reflexo" aria-hidden="true"></div>
-                                        <div class="vidro-sombra" aria-hidden="true"></div>
+                                        ${this.camadasVidro}
                                         <div class="item-content">
                                             <div class="error-icon" aria-hidden="true">⚠️</div>
                                             <h3 class="item-title">Erro ao carregar notícias</h3>
@@ -3104,36 +2755,6 @@
                     const el = widgetElements[index];
                     if (el && !widgetData.error && widgetData.items?.length > 1) {
                         ControladorCarrossel.iniciarCarrossel(el, widgetData.items.length);
-                    }
-                });
-                
-                // Trata imagens quebradas com gradientes de fallback
-                this.configurarTratadoresErroImagem(container);
-            },
-            
-            /**
-             * Configura handlers de erro para imagens de fundo
-             */
-            configurarTratadoresErroImagem(container) {
-                if (!container) return;
-                const feedItems = container.querySelectorAll('.feed-item[data-fallback]');
-                
-                feedItems.forEach(item => {
-                    // Cria imagem de teste para verificar se o fundo carrega
-                    const style = item.getAttribute('style') || '';
-                    const urlMatch = style.match(/url\(['"]?([^'")\s]+)['"]?\)/);
-                    
-                    if (urlMatch?.[1]) {
-                        const testImg = new Image();
-                        testImg.onerror = () => {
-                            // Aplica gradiente de fallback
-                            const fallback = item.getAttribute('data-fallback');
-                            if (fallback) {
-                                item.style.backgroundImage = 'none';
-                                item.style.background = fallback;
-                            }
-                        };
-                        testImg.src = urlMatch[1];
                     }
                 });
             },
@@ -3180,31 +2801,22 @@
             HIDE_DELAY: 3000,
             THROTTLE_MS: 100,
             
-            _handleMouseMove: null,
-            _handleMouseDown: null,
-            _handleTouchStart: null,
-
             iniciar() {
                 // Habilita apenas em modo fullscreen
                 if (!window.matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches) {
                     return;
                 }
 
-                // Cria handlers com referências para remoção posterior
-                this._handleMouseMove = () => {
+                // Adiciona event listeners
+                document.addEventListener('mousemove', () => {
                     const now = Date.now();
                     if (now - this.lastMoveTime >= this.THROTTLE_MS) {
                         this.lastMoveTime = now;
                         this.mostrarCursor();
                     }
-                };
-                this._handleMouseDown = () => this.mostrarCursor();
-                this._handleTouchStart = () => this.ocultarCursor();
-
-                // Adiciona event listeners
-                document.addEventListener('mousemove', this._handleMouseMove);
-                document.addEventListener('mousedown', this._handleMouseDown);
-                document.addEventListener('touchstart', this._handleTouchStart, { passive: true });
+                });
+                document.addEventListener('mousedown', () => this.mostrarCursor());
+                document.addEventListener('touchstart', () => this.ocultarCursor(), { passive: true });
                 
                 // Ocultação inicial
                 this.agendarOcultacao();
@@ -3222,30 +2834,6 @@
             agendarOcultacao() {
                 clearTimeout(this.hideTimeout);
                 this.hideTimeout = setTimeout(() => this.ocultarCursor(), this.HIDE_DELAY);
-            },
-            
-            /**
-             * Limpa recursos e remove event listeners
-             */
-            destruir() {
-                clearTimeout(this.hideTimeout);
-                this.hideTimeout = null;
-                
-                // Remove event listeners
-                if (this._handleMouseMove) {
-                    document.removeEventListener('mousemove', this._handleMouseMove);
-                    this._handleMouseMove = null;
-                }
-                if (this._handleMouseDown) {
-                    document.removeEventListener('mousedown', this._handleMouseDown);
-                    this._handleMouseDown = null;
-                }
-                if (this._handleTouchStart) {
-                    document.removeEventListener('touchstart', this._handleTouchStart);
-                    this._handleTouchStart = null;
-                }
-                
-                document.documentElement.classList.remove('cursor-hidden');
             }
         };
 
@@ -3270,11 +2858,6 @@
                     }
                 });
 
-                // Adiciona limpeza no beforeunload
-                window.addEventListener('beforeunload', () => {
-                    this.limpar();
-                });
-
                 // Carregamento inicial
                 await this.carregarFeeds();
                 
@@ -3282,21 +2865,6 @@
                 this.refreshInterval = setInterval(() => this.carregarFeeds(), CONFIG.INTERVALO_ATUALIZACAO);
             },
             
-            /**
-             * Limpa todos os recursos
-             */
-            limpar() {
-                if (this.refreshInterval) {
-                    clearInterval(this.refreshInterval);
-                    this.refreshInterval = null;
-                }
-                ControladorCarrossel.limparTodosTimers();
-                ControladorRelogio.destruir();
-                ControladorClima.destruir();
-                ControladorCotacoes.destruir();
-                ControladorCursor.destruir();
-            },
-
             /**
              * Verifica se atualização é necessária e dispara se for
              */
@@ -3340,8 +2908,8 @@
                     EstadoApp.lastFetchTime = Date.now();
                     
                 } catch (error) {
-                    registrarErro('Erro fatal ao carregar feeds:', error);
-                    
+                    console.warn('Erro fatal ao carregar feeds:', error);
+
                     // Mostra estado de erro
                     const container = document.getElementById('feedsContainer');
                     if (container) {
@@ -3363,128 +2931,32 @@
             }
         };
 
-        /* Service Worker */
-        const GerenciadorServiceWorker = {
-            /**
-             * Registra o service worker (apenas se sw.js existir no servidor, evita 404 no deploy)
-             */
-            async registrar() {
-                if (!('serviceWorker' in navigator)) {
-                    log('[App] Service Workers não suportados');
-                    return null;
-                }
-
-                try {
-                    // Verifica se sw.js existe antes de registrar (evita 404 quando não deployado junto)
-                    const check = await fetch('./sw.js', { method: 'HEAD' });
-                    if (!check.ok) {
-                        log('[App] sw.js não encontrado - registro de Service Worker omitido');
-                        return null;
-                    }
-
-                    const registration = await navigator.serviceWorker.register('./sw.js', {
-                        scope: './'
-                    });
-                    
-                    log('[App] Service Worker registrado:', registration.scope);
-                    
-                    // Escuta atualizações
-                    registration.addEventListener('updatefound', () => {
-                        const newWorker = registration.installing;
-                        log('[App] Nova versão do Service Worker encontrada');
-                        if (newWorker) {
-                            newWorker.addEventListener('statechange', () => {
-                                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                                    log('[App] Nova versão disponível - atualize a página');
-                                }
-                            });
-                        }
-                    });
-                    
-                    // Escuta mensagens do SW
-                    navigator.serviceWorker.addEventListener('message', (event) => {
-                        const data = event.data;
-                        if (data && (data.type === 'SYNC_FEEDS' || data.type === 'REFRESH_FEEDS')) {
-                            log('[App] Recebido comando de sync do SW');
-                            App.carregarFeeds();
-                        }
-                    });
-                    
-                    // Registra para sync periódico em background se suportado
-                    if ('periodicSync' in registration) {
-                        try {
-                            await registration.periodicSync.register('refresh-feeds', {
-                                minInterval: 10 * 60 * 1000 // 10 minutos
-                            });
-                            log('[App] Periodic Background Sync registrado');
-                        } catch (error) {
-                            log('[App] Periodic Background Sync não disponível:', error.message);
-                        }
-                    }
-                    
-                    return registration;
-                    
-                } catch (error) {
-                    registrarErro('[App] Erro ao registrar Service Worker:', error);
-                    return null;
-                }
-            },
-
-            /**
-             * Solicita sync em background
-             */
-            async solicitarSincronizacao() {
-                // Verifica se Background Sync é suportado
-                if (!('serviceWorker' in navigator) || !('SyncManager' in window)) {
-                    return false;
-                }
-
-                try {
-                    const registration = await navigator.serviceWorker.ready;
-                    if (!registration.sync) {
-                        return false;
-                    }
-                    await registration.sync.register('sync-feeds');
-                    log('[App] Background sync solicitado');
-                    return true;
-                } catch (error) {
-                    log('[App] Background sync não disponível:', error.message);
-                    return false;
-                }
-            },
-
-            /**
-             * Verifica se o app está rodando em modo fullscreen
-             */
-            estaAutonomo() {
-                return window.matchMedia('(display-mode: standalone)').matches ||
-                       window.matchMedia('(display-mode: fullscreen)').matches ||
-                       window.navigator.standalone === true;
+        /* Registra o service worker */
+        async function registrarServiceWorker() {
+            if (!('serviceWorker' in navigator)) return null;
+            try {
+                return await navigator.serviceWorker.register('./sw.js', { scope: './' });
+            } catch (error) {
+                return null;
             }
-        };
+        }
 
         /* Inicialização */
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', () => {
-                App.iniciar().catch((err) => registrarErro('[App] Erro na inicialização:', err));
-                GerenciadorServiceWorker.registrar();
+                App.iniciar().catch(() => {});
+                registrarServiceWorker();
                 ControladorCursor.iniciar();
             });
         } else {
-            App.iniciar().catch((err) => registrarErro('[App] Erro na inicialização:', err));
-            GerenciadorServiceWorker.registrar();
+            App.iniciar().catch(() => {});
+            registrarServiceWorker();
             ControladorCursor.iniciar();
         }
 
         // Trata eventos online/offline
         window.addEventListener('online', () => {
-            log('[App] Conexão restaurada - atualizando feeds');
             App.carregarFeeds();
-            GerenciadorServiceWorker.solicitarSincronizacao();
-        });
-
-        window.addEventListener('offline', () => {
-            log('[App] Offline - usando cache');
         });
     </script>
 </body>

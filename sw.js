@@ -21,23 +21,6 @@ const FEED_PROXY_PATTERNS = [
     'corsproxy.io'
 ];
 
-// APIs que devem usar network-first
-const NETWORK_FIRST_PATTERNS = [
-    'api.open-meteo.com',           // API de Clima
-    'nominatim.openstreetmap.org',  // Geocodificação
-    'economia.awesomeapi.com.br'    // API de Cotações
-];
-
-// Extensões de imagem válidas para cache
-const IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.svg', '.ico'];
-
-// Padrões de URL que indicam conteúdo de imagem
-const IMAGE_URL_PATTERNS = [
-    '/images/', '/img/', '/media/', '/uploads/',
-    '/wp-content/uploads/', '/static/images/',
-    '/thumbnails/', '/photos/', '/pictures/'
-];
-
 // Nome do cache de imagens
 const IMAGE_CACHE_NAME = `rss-images-${CACHE_VERSION}`;
 
@@ -109,12 +92,12 @@ function correspondeAoPadrao(url, patterns) {
  * Estratégia: Rede Primeiro com fallback para cache
  * Usada para APIs de dados dinâmicos
  */
-async function redePrimeiro(request, cacheName = CACHE_NAME) {
+async function redePrimeiro(request) {
     try {
         const networkResponse = await fetch(request);
-        
+
         if (networkResponse.ok) {
-            const cache = await caches.open(cacheName);
+            const cache = await caches.open(CACHE_NAME);
             // Clona porque response só pode ser consumido uma vez
             cache.put(request, networkResponse.clone());
         }
@@ -136,7 +119,7 @@ async function redePrimeiro(request, cacheName = CACHE_NAME) {
  * Estratégia: Cache Primeiro com fallback para rede
  * Usada para assets estáticos
  */
-async function cachePrimeiro(request, cacheName = CACHE_NAME) {
+async function cachePrimeiro(request) {
     const cachedResponse = await caches.match(request);
     
     if (cachedResponse) {
@@ -147,10 +130,10 @@ async function cachePrimeiro(request, cacheName = CACHE_NAME) {
         const networkResponse = await fetch(request);
         
         if (networkResponse.ok) {
-            const cache = await caches.open(cacheName);
+            const cache = await caches.open(CACHE_NAME);
             cache.put(request, networkResponse.clone());
         }
-        
+
         return networkResponse;
     } catch (error) {
         console.error('[SW] Falha ao buscar:', request.url);
@@ -163,8 +146,8 @@ async function cachePrimeiro(request, cacheName = CACHE_NAME) {
  * Retorna cache imediatamente enquanto atualiza em background
  * Ideal para feeds RSS
  */
-async function desatualizadoEnquantoRevalida(request, cacheName = FEED_CACHE_NAME) {
-    const cache = await caches.open(cacheName);
+async function desatualizadoEnquantoRevalida(request) {
+    const cache = await caches.open(FEED_CACHE_NAME);
     const cachedResponse = await cache.match(request);
     
     // Verifica se resposta em cache ainda é válida (dentro do TTL)
@@ -198,7 +181,7 @@ async function desatualizadoEnquantoRevalida(request, cacheName = FEED_CACHE_NAM
         .catch((error) => {
             console.log('[SW] Revalidação falhou:', error.message);
             // Retorna resposta em cache se disponível, senão erro de rede
-            return cachedResponse || criarRespostaOffline();
+            return cachedResponse || new Response('', { status: 503 });
         });
     
     // Retorna cache se disponível e válido, senão espera rede
@@ -273,50 +256,6 @@ async function limitarCacheImagens(cache) {
 }
 
 /**
- * Verifica se a URL é de uma imagem
- * Usa combinação de extensão + padrões de URL para evitar falsos positivos
- */
-function ehImagem(url) {
-    const urlLower = url.toLowerCase();
-    
-    // Ignora data URIs e blobs
-    if (urlLower.startsWith('data:') || urlLower.startsWith('blob:')) {
-        return false;
-    }
-    
-    // Verifica extensão de arquivo (mais confiável)
-    const temExtensaoImagem = IMAGE_EXTENSIONS.some(ext => {
-        // Verifica se a extensão está no final do pathname (antes de query string)
-        const urlSemQuery = urlLower.split('?')[0];
-        return urlSemQuery.endsWith(ext);
-    });
-    
-    if (temExtensaoImagem) {
-        return true;
-    }
-    
-    // Verifica padrões de URL conhecidos
-    return IMAGE_URL_PATTERNS.some(pattern => urlLower.includes(pattern));
-}
-
-/**
- * Cria uma resposta offline padrão
- */
-function criarRespostaOffline() {
-    return new Response(
-        JSON.stringify({ 
-            error: 'offline', 
-            message: 'Você está offline e não há dados em cache' 
-        }),
-        {
-            status: 503,
-            statusText: 'Service Unavailable',
-            headers: { 'Content-Type': 'application/json' }
-        }
-    );
-}
-
-/**
  * Evento de fetch - Intercepta todas as requisições
  */
 self.addEventListener('fetch', (event) => {
@@ -337,10 +276,7 @@ self.addEventListener('fetch', (event) => {
     if (correspondeAoPadrao(url, FEED_PROXY_PATTERNS)) {
         // Feeds RSS: Desatualizado Enquanto Revalida (resposta rápida + atualização)
         event.respondWith(desatualizadoEnquantoRevalida(request));
-    } else if (correspondeAoPadrao(url, NETWORK_FIRST_PATTERNS)) {
-        // APIs de tempo real: Rede Primeiro
-        event.respondWith(redePrimeiro(request));
-    } else if (ehImagem(url)) {
+    } else if (request.destination === 'image') {
         // Imagens (thumbnails): Cache Primeiro para performance offline
         event.respondWith(cacheImagemPrimeiro(request));
     } else if (url.includes('.html') || url.includes('.js') || url.includes('.css')) {
@@ -349,64 +285,6 @@ self.addEventListener('fetch', (event) => {
     } else {
         // Outros recursos: Rede Primeiro
         event.respondWith(redePrimeiro(request));
-    }
-});
-
-/**
- * Evento de mensagem - Comunicação com a página principal
- */
-self.addEventListener('message', (event) => {
-    if (event.data && event.data.type === 'SKIP_WAITING') {
-        self.skipWaiting();
-    }
-    
-    if (event.data && event.data.type === 'CLEAR_CACHE') {
-        Promise.all([
-            caches.delete(CACHE_NAME),
-            caches.delete(FEED_CACHE_NAME),
-            caches.delete(IMAGE_CACHE_NAME)
-        ]).then(() => {
-            console.log('[SW] Cache limpo (assets, feeds e imagens)');
-        });
-    }
-    
-    if (event.data && event.data.type === 'GET_VERSION') {
-        event.ports[0].postMessage({ version: CACHE_VERSION });
-    }
-});
-
-/**
- * Background Sync - Sincroniza feeds quando conexão retorna
- */
-self.addEventListener('sync', (event) => {
-    if (event.tag === 'sync-feeds') {
-        console.log('[SW] Background sync: atualizando feeds');
-        // A página principal vai lidar com a atualização real
-        // Aqui apenas notificamos os clients
-        event.waitUntil(
-            self.clients.matchAll().then((clients) => {
-                clients.forEach((client) => {
-                    client.postMessage({ type: 'SYNC_FEEDS' });
-                });
-            })
-        );
-    }
-});
-
-/**
- * Periodic Background Sync - Atualiza feeds periodicamente
- * Nota: Requer permissão e suporte do navegador
- */
-self.addEventListener('periodicsync', (event) => {
-    if (event.tag === 'refresh-feeds') {
-        console.log('[SW] Periodic sync: refresh de feeds');
-        event.waitUntil(
-            self.clients.matchAll().then((clients) => {
-                clients.forEach((client) => {
-                    client.postMessage({ type: 'REFRESH_FEEDS' });
-                });
-            })
-        );
     }
 });
 
